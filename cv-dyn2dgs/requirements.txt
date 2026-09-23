@@ -1,0 +1,15 @@
+# Core (required)
+torch>=2.1
+numpy>=1.24
+
+# Optional: real cine-CMR datasets (ACDC, M&Ms-2) ship as NIfTI
+nibabel>=5.1
+
+# Optional: figures for the experiment reports
+matplotlib>=3.7
+
+# Optional: independent cross-checks of HD95 / EDT
+scipy>=1.10
+
+# Optional: tests
+pytest>=7.4

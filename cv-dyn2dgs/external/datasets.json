@@ -1,0 +1,226 @@
+{
+  "schema": 1,
+  "generated": "2026-09-23",
+  "why_not_fetchable": "Unlike the code targets in manifest.json, the cardiac datasets this thesis needs are NOT clonable. ACDC, M&Ms, M&Ms-2 and the STACOM motion benchmark all require individual registration and acceptance of a data-use agreement; no script may bypass that, and none here tries to. What this manifest and scripts/fetch_datasets.py do instead is (a) record exactly where each dataset comes from, under what terms, and what must be cited, and (b) VERIFY a manually obtained copy against the layout cvdyn2dgs/data/real.py actually globs for - including whether the voxel spacing is still anisotropic, because a resampled copy silently invalidates the thesis's first contribution.",
+  "verifier_note": "scripts/fetch_datasets.py --verify parses NIfTI headers with the standard library only, so it runs before nibabel or PyTorch are installed. It is meant to be the first thing run after obtaining data, not the last.",
+  "datasets": [
+    {
+      "key": "acdc",
+      "name": "ACDC - Automated Cardiac Diagnosis Challenge",
+      "bib": "bernard2018_acdc",
+      "role": "primary real dataset: warm-start convergence (RQ1), ED/ES Dice and HD95, precompute time and model size, full-cycle FPS and flicker",
+      "access": "registration",
+      "url": "https://humanheart-project.creatis.insa-lyon.fr/database/",
+      "alternate_url": "https://www.creatis.insa-lyon.fr/Challenge/acdc/",
+      "license": "data-use agreement accepted at registration; redistribution not permitted",
+      "cite_required": true,
+      "n_subjects": 150,
+      "used_by": "cvdyn2dgs.data.real.load_acdc_patient",
+      "expected_layout": {
+        "root_contains": [
+          "training"
+        ],
+        "patient_dir_glob": "training/patient*",
+        "required_per_patient": [
+          "{pid}_4d.nii*"
+        ],
+        "optional_per_patient": [
+          "Info.cfg",
+          "{pid}_frame*_gt.nii*"
+        ],
+        "cine_must_be_4d": true,
+        "label_codes": {
+          "rv_cavity": 1,
+          "lv_myocardium": 2,
+          "lv_cavity": 3
+        }
+      },
+      "expected_geometry": {
+        "anisotropic_required": true,
+        "typical_spacing_mm": [
+          1.5,
+          1.5,
+          10.0
+        ],
+        "min_z_to_xy_ratio": 2.0,
+        "spacing_must_vary_across_subjects": true,
+        "why": "Contribution 1 is the spacing-aware discretisation. On near-isotropic data the spacing_aware=False ablation cannot show a difference, so the experiment becomes vacuous rather than negative. ACDC's through-plane spacing is typically 5-10 mm against 1.4-1.8 mm in plane; that ratio is the point. ACDC is multi-scanner, so the in-plane spacing also differs between subjects - a copy where every subject shares one spacing has been resampled.",
+        "resampled_fingerprints": [
+          {
+            "spacing_mm": [
+              1.0,
+              1.0,
+              10.0
+            ],
+            "in_plane_shape": [
+              192,
+              192
+            ],
+            "mirror": "Hugging Face mathpluscode/ACDC",
+            "reason": "Resampled to 1x1x10 mm and centre-cropped to 192x192. The through-plane spacing survives, so a naive anisotropy-ratio test passes this copy - it must be matched by fingerprint instead."
+          }
+        ]
+      },
+      "known_mirrors": [
+        {
+          "url": "https://huggingface.co/datasets/mathpluscode/ACDC",
+          "usable_for_this_thesis": false,
+          "reason": "Pre-processed: resampled to 1x1x10 mm and centre-cropped to 192x192 around the LV mask. Resampling destroys the original anisotropy and the cropping discards the field of view, so contribution 1 cannot be measured on it and physical-mm surface distances are no longer the scanner's. Convenient for segmentation benchmarks, wrong for this thesis."
+        }
+      ],
+      "caveat": "Ground truth exists at ED and ES ONLY. data/real.py leaves intermediate-frame masks absent rather than interpolating, and surface_source.SurfaceSequence.require_full() refuses whole-sequence metrics for a label-derived oracle. Do not average a segmentation metric over unlabelled frames."
+    },
+    {
+      "key": "mnms2",
+      "name": "M&Ms-2 - Multi-Disease, Multi-View, Multi-Centre RV Segmentation",
+      "bib": "martinisla2023_mnms2",
+      "role": "external-domain check: does surface tracking and appearance hold up on other hospitals, scanners and pathologies. LA view used only as a cross-view consistency check, never for fitting.",
+      "access": "registration",
+      "url": "https://www.ub.edu/mnms-2/",
+      "alternate_url": "https://competitions.codalab.org/competitions/31559",
+      "license": "challenge data-use agreement; redistribution not permitted",
+      "cite_required": true,
+      "n_subjects": 360,
+      "used_by": "cvdyn2dgs.data.real.load_mnms2_patient",
+      "expected_layout": {
+        "patient_dir_glob": "*",
+        "required_per_patient": [
+          "*SA_CINE.nii*|*SA.nii*"
+        ],
+        "optional_per_patient": [
+          "*SA_ED_gt.nii*",
+          "*SA_ES_gt.nii*",
+          "*LA_CINE.nii*"
+        ],
+        "cine_must_be_4d": true,
+        "label_codes": {
+          "rv_cavity": 1,
+          "lv_myocardium": 2,
+          "lv_cavity": 3
+        }
+      },
+      "expected_geometry": {
+        "anisotropic_required": true,
+        "typical_spacing_mm": [
+          1.2,
+          1.2,
+          10.0
+        ],
+        "min_z_to_xy_ratio": 2.0,
+        "why": "Same as ACDC. Multi-vendor data also varies the spacing between subjects, which is itself useful: it exercises the spacing-aware operators across a real range rather than one fixed anisotropy."
+      },
+      "known_mirrors": [],
+      "caveat": "The challenge targets the RIGHT ventricle. This thesis segments the LV cavity only (label 3), so the headline challenge metrics are not comparable to anything here. File naming differs between releases - data/real.py globs rather than assuming, and reports clearly when nothing matches."
+    },
+    {
+      "key": "mnms",
+      "name": "M&Ms - Multi-Centre, Multi-Vendor, Multi-Disease Cardiac Segmentation",
+      "bib": "campello2021_mnms",
+      "role": "optional additional external domain (LV and myocardium rather than RV)",
+      "access": "registration",
+      "url": "https://www.ub.edu/mnms/",
+      "license": "challenge data-use agreement; redistribution not permitted",
+      "cite_required": true,
+      "n_subjects": 375,
+      "used_by": "cvdyn2dgs.data.real.load_mnms2_patient (same loader, SA view)",
+      "expected_layout": {
+        "patient_dir_glob": "*",
+        "required_per_patient": [
+          "*SA_CINE.nii*|*SA.nii*"
+        ],
+        "optional_per_patient": [
+          "*SA_ED_gt.nii*",
+          "*SA_ES_gt.nii*"
+        ],
+        "cine_must_be_4d": true,
+        "label_codes": {
+          "rv_cavity": 1,
+          "lv_myocardium": 2,
+          "lv_cavity": 3
+        }
+      },
+      "expected_geometry": {
+        "anisotropic_required": true,
+        "typical_spacing_mm": [
+          1.2,
+          1.2,
+          10.0
+        ],
+        "min_z_to_xy_ratio": 2.0,
+        "why": "As above."
+      },
+      "known_mirrors": [],
+      "caveat": "Distinct from M&Ms-2 and a different paper. Do not cite one for the other; the bibliography note on martinisla2023_mnms2 records why that confusion was already made once in this project's source documents."
+    },
+    {
+      "key": "stacom2011_motion",
+      "name": "STACOM 2011 Myocardial Tracking benchmark",
+      "bib": "tobongomez2013_benchmarking",
+      "role": "auxiliary only: quantify how much real tissue motion is lost by modelling normal-direction shape motion alone. NOT a claim that this method estimates strain.",
+      "access": "registration",
+      "url": "https://www.cardiacatlas.org/motion-tracking-2011-challenge/",
+      "license": "Cardiac Atlas Project terms; registration required",
+      "cite_required": true,
+      "n_subjects": 15,
+      "used_by": "no loader implemented",
+      "expected_layout": null,
+      "expected_geometry": null,
+      "known_mirrors": [],
+      "caveat": "Carries motion ground truth, which is why it is the only honest way to measure the tangential-motion limitation. No loader exists yet; this entry marks the gap rather than hiding it."
+    },
+    {
+      "key": "biv-me-rescans",
+      "name": "biv-me rescans - cine CMR plus biventricular surface meshes",
+      "bib": "dillon2026_bivme",
+      "role": "reference meshes for the layer-2 mesh comparison, produced by the biv-me pipeline itself",
+      "access": "registration",
+      "url": "https://www.cardiacatlas.org/biv-me-rescans/",
+      "license": "Cardiac Atlas Project terms; registration required",
+      "cite_required": true,
+      "n_subjects": 10,
+      "used_by": "cvdyn2dgs.experiments.external (mesh_sequence adapter)",
+      "expected_layout": null,
+      "expected_geometry": null,
+      "known_mirrors": [],
+      "caveat": "Ten healthy subjects scanned at two timepoints. Small and healthy-only, so it supports a mesh-versus-surfel representation comparison but says nothing about pathology."
+    },
+    {
+      "key": "msd_task02_heart",
+      "name": "Medical Segmentation Decathlon, Task02 Heart",
+      "bib": null,
+      "role": "NONE for this thesis - listed because it is the one openly downloadable cardiac MR dataset and will otherwise be proposed as a substitute",
+      "access": "open-download",
+      "url": "http://medicaldecathlon.com/",
+      "alternate_url": "https://registry.opendata.aws/msd/",
+      "license": "CC-BY-SA 4.0",
+      "cite_required": true,
+      "n_subjects": 30,
+      "used_by": null,
+      "expected_layout": null,
+      "expected_geometry": null,
+      "known_mirrors": [],
+      "usable_for_this_thesis": false,
+      "caveat": "Genuinely open, no registration - and still the wrong dataset. Task02 is LEFT ATRIUM segmentation from single-phase 3-D MR. There is no time dimension, so nothing about warm starting, temporal transport, flicker or playback can be measured on it, and there is no LV cavity label. Use it to smoke-test a NIfTI loader if you like; do not use it as a stand-in for ACDC.",
+      "cite_note": "CC-BY-SA 4.0 requires attribution if used. No refs.bib entry is carried because this dataset is not usable for this thesis and must not appear in its results; add the Antonelli et al. 2022 Nature Communications reference if that ever changes."
+    },
+    {
+      "key": "phantom",
+      "name": "Synthetic 4-D cardiac phantom (generated by this repository)",
+      "bib": null,
+      "role": "convergence-rate verification and geometric accuracy - the only source that provides an exact analytic signed distance function, exact normals, and a freely chosen anisotropic spacing",
+      "access": "generated",
+      "url": null,
+      "license": "MIT, part of this repository",
+      "cite_required": false,
+      "n_subjects": null,
+      "used_by": "cvdyn2dgs.data.phantom.make_phantom",
+      "expected_layout": null,
+      "expected_geometry": {
+        "anisotropic_required": false,
+        "why": "The phantom's spacing is a parameter, so the spacing ablation is run by choosing it rather than by finding a dataset that happens to have it."
+      },
+      "known_mirrors": [],
+      "caveat": "A validation instrument, not a dataset. It exists because no real dataset supplies an exact SDF, and it says nothing about robustness to real anatomy or pathology. It deliberately includes papillary muscles to violate the piecewise-constant intensity assumption Chan-Vese rests on."
+    }
+  ]
+}

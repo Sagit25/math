@@ -1,0 +1,195 @@
+\chapter{선행연구}
+\label{ch:related}
+
+\section{세 가지 문제의 구분}
+
+비슷해 보이는 연구라도 실제로 푸는 문제는 다르다. \emph{분할}은 각 프레임에서
+심장 영역이 어디인지 찾는 문제이고, \emph{운동 추적}은 이전 프레임의 동일한
+조직점이 다음 프레임에서 어디로 갔는지 찾는 문제이며, \emph{렌더링}은 얻어진
+구조와 밝기를 사람이 빠르게 관찰할 수 있는 영상으로 만드는 문제이다. 본 연구는
+첫째와 셋째를 연결한다. 법선 정사영만으로는 접선 방향의 실제 조직 이동을 알 수
+없으므로 둘째를 해결한다고 주장하지 않는다.
+
+\section{활성 윤곽과 4D level-set}
+
+Chan과 Vese는 영상 gradient 대신 경계 안팎의 밝기 평균 차이와 경계 길이를
+최소화하는 활성 윤곽을 제안하였다~\citep{chan2001_active}. Level-set
+방법~\citep{osher1988_fronts}은 곡면을 함수의 영도집합으로 나타내므로 2차원
+곡선에서 3차원 곡면으로 자연스럽게 확장되고 위상 변화를 자동으로 다룬다.
+Chan--Vese의 이론적 토대는 Mumford--Shah 범함수~\citep{mumford1989_optimal}의
+조각마다 상수 축약이다.
+
+Drapaca 등은 multi-phase Chan--Vese를 공간과 시간에 걸친 4D level-set으로 확장하여
+연속 MR 영상의 변화하는 조직 경계를 분할하였다~\citep{drapaca2005_segmentation}.
+따라서 ``시간축을 포함한 Chan--Vese'' 자체는 새로운 주장이 될 수 없다.
+
+심장 영상에서도 이 방향은 충분히 연구되었다. Duan 등은 실시간 분할을 목표로 Active
+Geometric Functions를 제안하였고~\citep{duan2010_realtime}, Queir\'os 등은 cine CMR의
+ED에서 3차원 표면을 만든 뒤 해부학적 제약을 둔 optical flow로 전체 주기를
+추적하였다~\citep{queiros2014_fast}. Avendi 등은 학습된 국소화 뒤에 변형 모형
+(deformable model) 정련을 붙여 좌심실과 우심실을 분할하였는데, 이는 학습 요소와
+변분적 표면 진화를 결합한 초기 사례이다~\citep{avendi2016_combined,avendi2017_rv}.
+최근의 CSTM은 학습 기반 시공간 메모리로 전체 cine 시퀀스의 4D 분할을 수행하며
+basal/apical slice의 through-plane motion 문제를 다룬다~\citep{ye2025_cstm}. 한편
+현재 심장 분할의 사실상 기준선은 nnU-Net 계열이며~\citep{isensee2021_nnunet},
+Chan--Vese의 Dice가 이들보다 낮다는 사실은 본 연구에 대한 반박이 아니다. 본 연구가
+표면 공급원에서 요구하는 것은 mask가 아니라 부호 거리장 $\levt$와 그 기울기이며,
+제 \ref{sec:external-baselines}절의 층위 1 실험은 공급원을 교체하여 이 구분을
+측정 가능한 형태로 만든다.
+
+\caveat{%
+정정. 본 절의 Avendi 인용은 초기 원고에서 ``Chan--Vese 계열의 영역 항''을 사용한
+연구로 잘못 기술되어 있었고, 출처 또한 존재하지 않는 서지사항이었다. 확인 결과 해당
+연구는 CNN/auto-encoder 국소화와 변형 모형 정련의 결합이므로 위와 같이 고쳤다.}
+
+\caveat{%
+본 연구가 이 계열과 겹치는 부분은 (i) 이전 시간의 결과를 다음 시간에 재사용하고,
+(ii) 심장 표면 시계열을 만들며, (iii) 시간적 일관성과 계산 속도를 평가한다는 점이다.
+차이는 Chan--Vese 결과를 최종 mask로 끝내지 않고, $\levt$와 $\gradh\levt$를 surfel
+중심과 접평면의 명시적 전송 규칙에 사용한다는 점이다. 따라서 본 연구의 독창성은
+새로운 분할 이론이 아니라, 기존 변분 표면을 surface-native 렌더링 표현과 연결하는
+수학적 갱신 규칙과 그 효율 분석에 있다.}
+
+또한 본 연구가 ``4D Chan--Vese''라는 말을 쓰지 않는 이유를 밝혀 둔다. 그 용어에는
+(i) $x,y,z,t$ 전체를 하나의 energy에서 동시에 최적화하는 결합 4D level-set과
+(ii) 각 시간에서 3D Chan--Vese를 풀되 이전 결과를 시작점으로 쓰는 연속적 3D
+Chan--Vese라는 두 뜻이 섞인다. 본 논문의 방법은 두 번째이므로
+\emph{frame-to-frame warm-started 3D Chan--Vese}라고 정확히 표현한다.
+
+\section{3DGS에서 2DGS로}
+
+3D Gaussian Splatting은 장면을 부피를 가진 비등방 Gaussian 타원체로 나타내고 빠른
+미분가능 래스터화로 실시간 novel-view 렌더링을 가능하게 하였다~\citep{kerbl2023_3dgs}.
+그러나 얇은 표면을 3차원 blob으로 근사하면 두께와 시점에 따라 표면이 퍼지거나
+geometry가 일관되지 않을 수 있다.
+
+Huang 등의 2DGS는 각 primitive를 3차원 공간에 놓인 2차원 Gaussian 원반으로 바꾸고
+카메라 광선과 원반의 교점을 원근 정합하게 계산한다~\citep{huang2024_2dgs}. Depth
+distortion과 normal consistency 정규화를 사용하여 3DGS보다 표면 복원에 적합한
+geometry를 얻는 것이 핵심이다. 본 연구에서 2DGS를 선택하는 이유는 점을 예쁘게
+그리기 위해서가 아니라, Chan--Vese가 산출한 2차원 곡면과 rendering primitive의
+차원을 맞추기 위해서이다.
+
+정적 2DGS 자체는 본 연구의 독창성이 아니다. 본 연구는 알려진 2DGS 래스터화 원리를
+사용하되, surfel의 중심과 접평면을 cine CMR의 Chan--Vese level-set으로부터 직접
+갱신한다. 즉 새로 제안하는 대상은 렌더러가 아니라 시간 갱신과 저장 표현이다.
+
+\section{동적 2DGS와 정준 표현 재사용}
+
+Dynamic 2D Gaussians는 sparse control point로 2D Gaussian의 움직임을 제어하여 동적
+객체의 렌더링과 mesh 추출을 수행한다~\citep{zhang2025_d2dgs}. Space-time 2DGS도
+정준 2D Gaussian과 학습된 변형을 결합하고 depth 및 normal 정규화로 동적 표면을
+복원한다~\citep{wang2024_st2dgs}. 따라서 ``2D Gaussian을 시간에 따라 이동한다''는
+생각 역시 이미 존재한다. 4D-GS는 하나의 정준 3D Gaussian 집합에 신경 변형을 적용하여
+동적 장면을 나타내므로, ``첫 표현을 만들고 시간에 따라 primitive를 재사용한다''는
+큰 구조도 이미 존재한다~\citep{wu2024_4dgs}.
+
+이들과 본 연구의 차이는 네 가지이다. 본 연구는 (i) cine CMR의 알려진 물리 좌표를
+사용하고, (ii) 각 프레임의 Chan--Vese 영도집합을 목표 표면으로 삼으며, (iii) 신경
+변형이나 control-point 망을 학습하지 않고, (iv) 최소 크기의 법선 이동으로 surfel을
+갱신한다. 이러한 제약은 자유로운 동작 표현력을 낮추지만, 추가 학습자료 없이 환자별로
+계산할 수 있고 각 이동의 근거가 $\levt$와 $\gradh\levt$로 명시된다.
+
+\section{Dyna3DGR: 가장 가까운 선행연구}
+\label{sec:dyna3dgr}
+
+Dyna3DGR은 explicit 3D Gaussian과 implicit neural motion field를 함께 최적화하여
+cine CMR에서 구조와 운동을 self-supervised하게 복원한다~\citep{fu2025_dyna3dgr}.
+ACDC에서 학습용 point correspondence 없이 운동 추적을 평가했다는 점, 환자 하나에
+대해 instance optimization을 수행한다는 점, Gaussian을 시간에 따라 재사용한다는
+점에서 본 연구와 가장 많이 겹친다.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Dyna3DGR과 CV-Dyn2DGS의 구조적 차이. 본 연구에서는 Dyna3DGR을 재현하지
+않았으므로 수치 비교를 제시하지 않는다(제 \ref{sec:no-dyna-repro}절).}
+\label{tab:dyna3dgr}
+\begin{tabular}{@{}lll@{}}
+\toprule
+ & Dyna3DGR & CV-Dyn2DGS \\
+\midrule
+Primitive & 부피를 채우는 3D 타원체 & 표면 위 2D 원반 \\
+시간 변화 & 연속 신경 motion field & 프레임별 $\surft$ + 국소 법선 정사영 \\
+목표 & 위상/시간 일관 운동 추적 & 표면 외형의 저비용 저장과 실시간 재생 \\
+표현 범위 & volumetric intensity와 내부 운동 & 명시적 장기 표면 \\
+학습 & 환자별 self-supervised & 환자별, 신경망 없음 \\
+취약점 & 최적화 비용, 모델 복잡성 & 접선 운동, 큰 프레임 간 이동, 위상 변화 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\caveat{%
+\label{sec:no-dyna-repro}%
+Dyna3DGR은 본 연구에서 \textbf{재현하지 않았다}. ACDC 데이터와 GPU 학습이 필요하며
+본 연구의 실행 환경에 GPU가 없었다. 따라서 어떤 수치도 Dyna3DGR에 귀속시키지 않으며,
+표 \ref{tab:dyna3dgr}의 구조적 비교만 제시한다. 저자 답변에 보고된 환자별 최적화 약
+11분이라는 값은 \emph{출처의 주장}으로만 언급하며 본 연구의 측정값과 나란히 놓지
+않는다.
+
+\textbf{단, 한 가지를 정정한다.} 원 제안서는 저자 공개 구현이 없어 재현이 어렵다고
+가정하였으나, 확인 결과 Dyna3DGR의 구현은 \texttt{github.com/windrise/Dyna3DGR}에
+공개되어 있다. 즉 재현 불가의 근거는 ``코드가 없다''가 아니라 ``본 원고 작성 환경에
+GPU가 없다''는 것뿐이며, GPU가 있는 환경에서는 재현이 정당하게 요구될 수 있다.
+제안서 §5.7의 면제 조항(``재현이 어려우면 구조적 차이만 보고'')을 이 논문이 계속
+원용하는 것은 따라서 잠정적이다. 제 \ref{sec:external-baselines}절은 이를 미실시
+비교로 명시적으로 기록한다.}
+
+\section{시간가변 심장 mesh: surface-only 목적의 강한 대안}
+
+Meng 등은 ED myocardial mesh의 vertex displacement를 SAX와 LAX cine MRI로부터
+추정하는 딥러닝 방법을 제안하였다~\citep{meng2022_mesh}. 고정 mesh connectivity와
+vertex correspondence를 유지하므로 기능적 측정에 유리하다. Liu 등의 개인화 4D
+whole-heart mesh 연구는 multi-view cine MRI, mesh VAE, 다중 스케일 시간 모델링과
+미분가능 contour rendering을 결합하여 네 개 심방/심실의 부드러운 mesh 궤적을
+복원한다~\citep{liu2026_personalized}. biv-me는 이러한 아이디어를 실사용 가능한
+공개 파이프라인 수준으로 확장한 매우 강한 선행연구로, cine CMR로부터 시간가변
+biventricular mesh를 생성하고 volume, strain, wall thickness를 계산하며 여러
+cohort에서 대규모 검증을 수행하였다~\citep{dillon2026_bivme}.
+
+\caveat{%
+즉 ``심장 표면을 자동으로 만들고 돌려 본다''는 목적만으로는 본 연구가 이들보다
+새롭거나 유리하다고 말할 수 없다. CV-Dyn2DGS가 mesh 연구와 구별되려면 두 가지가
+실험으로 확인되어야 한다. 첫째, 같은 Chan--Vese 표면에서 2D surfel이 mesh보다
+silhouette, normal/depth 일관성 또는 MRI-derived appearance를 더 잘 전달해야 한다.
+둘째, 프레임별 2DGS를 독립 생성하는 것보다 정준 2DGS와 작은 잔차의 저장 및 갱신
+비용이 작아야 한다. 이 장점이 나타나지 않으면 ``단순 표면 viewer에는 mesh가 더
+적절하다''가 올바른 결론이다. 또한 vertex correspondence가 중요한 strain 계산에서는
+mesh 운동 추적이 본 연구보다 적합하다.}
+
+\section{의료영상 Gaussian Splatting}
+
+ClipGS는 정적 CT 및 해부학 volume을 대상으로 clipping plane을 지원하는 Gaussian
+시각화를 제안하였다~\citep{li2025_clipgs}. 이는 의료용 GS viewer가 빠르게 동작할 수
+있음을 보여주지만 장기의 시간 변형을 풀지는 않는다. GaussianPile은 slice thickness의
+point-spread function을 고려한 비등방 Gaussian으로 slice 기반 의료 volume을
+복원한다~\citep{kong2026_gaussianpile}. Park 등은 sparse non-aligned spine MRI에서
+해부학적으로 유용한 새로운 단면을 Gaussian으로 렌더링한다~\citep{park2026_rendering}.
+
+이들은 MRI/의료 volume의 내부 밝기를 GS로 표현한다는 점에서 더 강하지만, 반복되는
+심장 표면을 이전 프레임에서 저비용으로 갱신하는 문제는 다루지 않는다. 역으로 본
+연구의 2D 원반은 표면을 표현하므로 ``임의 단면을 정확히 복원하는 full volume
+renderer''라고 주장할 수 없다.
+
+\section{연구 공백의 정확한 진술}
+\label{sec:gap}
+
+위 검토에서 이미 다루어진 것은 3D/4D Chan--Vese, 이전 윤곽을 이용한 심장 분할,
+정적 및 동적 2DGS, 정준 primitive와 변형을 이용한 4D-GS, 동적 심장 Gaussian,
+시간가변 심장 mesh, 그리고 GS 기반 의료 volume 시각화이다. 따라서 본 논문은 최초의
+4D Chan--Vese, 최초의 2DGS, 최초의 움직이는 2D Gaussian, 최초의 실시간 의료 GS
+viewer 중 어느 것도 주장하지 않는다.
+
+현재 조사 범위에서 직접 확인되지 않은 조합은 다음이다.
+
+\begin{quote}
+cine CMR의 프레임별 Chan--Vese implicit surface 값과 법선으로 정준 2D Gaussian
+surfel의 중심과 접평면을 갱신하고, 별도의 신경/dense deformation field 없이
+표면 시계열과 작은 외형 잔차만 저장하는 표현.
+\end{quote}
+
+이 문장은 체계적 문헌고찰에 의한 ``세계 최초'' 주장이 아니라, 본 연구 단계에서
+확인된 구체적 연구 공백이다. 그러므로 기여의 강도는 조합 자체보다 실험 결과로
+결정된다. 즉 (i) 동적 2DGS 및 Dyna3DGR보다 단순한 갱신이 어느 정도의 품질을
+유지하는지, (ii) 독립 2DGS보다 시간과 저장량을 실제로 줄이는지, (iii) mesh 및 얇은
+3DGS보다 2D 표면 primitive가 의미 있는지를 동시에 보여야 한다.

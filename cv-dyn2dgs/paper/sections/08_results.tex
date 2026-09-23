@@ -1,0 +1,142 @@
+\chapter{결과}
+\label{ch:results}
+
+\ifdraftmode
+\begin{center}
+\fcolorbox{red}{red!5}{%
+\begin{minipage}{0.93\linewidth}
+\small
+\textcolor{red}{\textbf{본 장의 상태}}\par\smallskip
+제 \ref{sec:kernel-results}절을 제외한 본 장의 모든 표는 \textbf{비어 있다}.
+구현은 완성되었으나 실행되지 않았으므로(제 \ref{sec:impl-status}절) RQ1--RQ6의 어떤
+수치도 존재하지 않는다. 미측정 항목은 \NM 로 표시하였다.\par\smallskip
+표들은 손으로 채우도록 설계되지 않았다. \texttt{cvdyn2dgs experiments}가 산출하는
+JSON을 \texttt{scripts/make\_tables.py}가 읽어 \texttt{paper/tables/}의 \texttt{.tex}
+파일을 생성하며, 본 장은 그것을 \texttt{\textbackslash input}한다. 숫자를 원고에
+직접 타이핑하는 경로는 존재하지 않는다.
+\end{minipage}}
+\end{center}
+\medskip
+\fi
+
+\section{실행된 검증: 이산 논리 커널}
+\label{sec:kernel-results}
+
+본 절은 본 논문에서 유일하게 \emph{측정된} 결과이다. 제
+\ref{sec:kernel-verification}절에서 기술한 커널 검증을 실행한 결과 41개 항목 전부가
+통과하였다. PyTorch를 필요로 하지 않으므로 어떤 환경에서도 재현할 수 있다.
+
+\input{tables/kernel_checks}
+
+이 결과의 범위는 제한적이다. 통과는 이산 색인 논리가 건전함을 뜻하며, 파이프라인이
+동작함을 뜻하지 않는다. 특히 래스터화, 자동미분, Chan--Vese 솔버, 전체 파이프라인은
+전혀 포함되지 않는다.
+
+\section{이론 수렴률}
+\label{sec:results-rates}
+
+제 \ref{ch:error}장의 수렴률 주장은 $\spacing$을 변화시키며 $\log$--$\log$ 기울기를
+적합하여 확인한다.
+
+\input{tables/theory_rates}
+
+\pending{%
+명제 \ref{prop:normal-error}이 예측하는 $\sin\theta = O(\hmax^2)$의 경험적 지수,
+보조정리 \ref{lem:quadratic}이 예측하는 이차 수축의 경험적 차수, 명제
+\ref{prop:planar-disk}의 $O(\kappa s^2)$ 비례상수, 명제 \ref{prop:interp-eikonal}의
+측정 대 예측 eikonal 노름. 실행 명령: \texttt{cvdyn2dgs theory}.}
+
+\section{RQ1: 웜스타트}
+\label{sec:results-rq1}
+
+\input{tables/rq1_warmstart}
+
+\pending{%
+웜스타트와 콜드스타트의 총 반복 횟수 및 벽시계 시간, 참조 해에 대한 $K(e_0)$(식
+\eqref{eq:iteration-bound}), 초기 오차 $e_0$. 정리 \ref{thm:warmstart}은 \emph{순서}만
+예측하므로, 확인할 것은 $K(e^{\mathrm{warm}}_0)\le K(e^{\mathrm{cold}}_0)$이다.
+벽시계 시간의 격차는 좁은 띠 crop 효과와 섞이므로 반복 횟수와 분리하여 해석해야 한다.}
+
+\section{RQ2: 정사영 대 독립 재최적화}
+\label{sec:results-rq2}
+
+\input{tables/rq2_cost_quality}
+
+\pending{%
+식 \eqref{eq:cost-hypothesis}의 좌변 네 항($C_{\mathrm{CV}}$, $C_{\mathrm{project}}$,
+$C_{\mathrm{orient}}$, $C_{\mathrm{res}}$)을 각각, 그리고 우변 $C_{\mathrm{full}}$을
+측정하여 부등식이 성립하는지 확인한다. 품질 측면에서는 independent 2DGS를 상한으로
+두고 비열등성 마진 안에 들어오는지 본다. 목표는 이기는 것이 아니라 마진 안에 있으면서
+비용이 작은 것이다.}
+
+\section{RQ3: 저장량}
+\label{sec:results-rq3}
+
+\input{tables/rq3_storage}
+
+\pending{%
+$\Sfull$, $\Sours$, $\CR$을 세 가지 표면 저장 방식에 대해, 그리고 이론적 바이트 수와
+실제 파일 크기를 나란히. 식 \eqref{eq:breakeven}의 손익분기 예산과 실제 프레임당 표면
+크기의 비교가 핵심이다. $\CR<1$이면 제안 표현이 이 구성에서 이기지 못한다는 뜻이며,
+그것도 유효한 결과이다.}
+
+\section{RQ4: 재생 속도}
+\label{sec:results-rq4}
+
+\input{tables/rq4_fps}
+
+\pending{%
+식 \eqref{eq:frame-budget}의 네 항을 분해하여, surfel 수와 viewer 해상도를 스윕하며
+95번째 백분위 latency가 33.3\,ms 미만인지 확인한다. 또한 제 \ref{sec:seek-problem}절의
+순차 대 정준 정사영 격차를 측정한다. 이 격차가 크면 임의 탐색을 식 \eqref{eq:store}의
+저장량만으로 제공할 수 없다는 뜻이다.}
+
+\section{RQ5: mesh와의 비교}
+\label{sec:results-rq5}
+
+\input{tables/rq5_mesh}
+
+\pending{%
+동일 표면, 비슷한 primitive 예산에서 silhouette(문턱값 스윕), boundary F-score, depth
+RMSE, normal angular error, ROI PSNR/SSIM, $\Eflicker$를 지표별로 비교한다. 단일 점수로
+합치지 않고 지표별 승패를 보고한다. 2DGS가 어느 지표에서도 개선하지 못하면 ``이
+목적에는 mesh가 더 적절하다''가 올바른 결론이다.}
+
+\section{RQ6: 2D 원반 대 얇은 3D Gaussian}
+\label{sec:results-rq6}
+
+\input{tables/rq6_thin3dgs}
+
+\pending{%
+법선방향 두께 비 $\rho$를 스윕하며 depth RMSE와 normal angular error를 비교한다.
+thin-3DGS의 깊이는 자락 전역에서 상수이므로 2DGS의 깊이 우위는 명제
+\ref{prop:perspective}의 직접 검증이며 독립적 발견이 아니다. 더 얇은 타원체는
+기하학적으로 원반에 가깝지만 조건수가 나빠지므로 그 절충이 스윕에서 드러난다.}
+
+\section{기준선 종합}
+\label{sec:results-baselines}
+
+\input{tables/baselines}
+
+\pending{%
+표 \ref{tab:baselines}의 모든 기준선에 대한 주요 지표. 실행 명령:
+\texttt{cvdyn2dgs experiments --size small}.}
+
+\section{Ablation}
+\label{sec:results-ablation}
+
+\input{tables/ablations}
+
+\pending{%
+제 \ref{sec:ablation-design}절의 각 항목. 특히 간격 인지 여부의 ablation은 첫 번째
+기여의 유일한 직접 시험이므로, 등방 격자와 비등방 격자에서의 격차를 함께 제시해야
+한다.}
+
+\section{개발 단계}
+\label{sec:results-stages}
+
+\input{tables/stages}
+
+\pending{%
+v1 $\to$ v2 $\to$ v3의 품질, 비용, 저장량 변화. 각 단계가 무엇을 얻고 무엇을
+지불하는지를 함께 보아야 하며, 추가 계산만으로 산 향상은 그것으로 드러난다.}

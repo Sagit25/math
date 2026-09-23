@@ -1,0 +1,86 @@
+\chapter{기호 정리}
+\label{app:symbols}
+
+\section{분할과 level-set}
+
+\begin{longtable}{@{}lp{10.2cm}@{}}
+\toprule
+기호 & 의미 \\
+\midrule
+\endhead
+$\dom \subset \Real^3$ & 영상이 정의된 유계 열린 영역. $\partial\dom$은 조각마다 매끄럽다. \\
+$\imgt : \dom \to \Real$ & 프레임 $t$의 3차원 영상. 유계이며 제곱적분가능. \\
+$\levt : \dom \to \Real$ & 프레임 $t$의 level-set 함수. Lipschitz 이상으로 매끄럽다. \\
+$\surft = \{\levt = 0\}$ & 프레임 $t$의 표면. \textbf{$\levt>0$이 내부}(식 \eqref{eq:sign}). \\
+$\spacing = (h_x,h_y,h_z)$ & 복셀 간격 (mm). MRI에서 보통 $h_z \ge h_x \approx h_y$. \\
+$\hmax$ & $\max\{h_x,h_y,h_z\}$. 명제 \ref{prop:normal-error}의 수렴률 변수. \\
+$\gradh, \divh$ & 간격 인지 경사와 발산 (식 \eqref{eq:central-grad}, \eqref{eq:backward-div}). \\
+$D^\pm_a$ & 축 $a$의 전진/후진 차분 (식 \eqref{eq:forward-diff}, \eqref{eq:backward-diff}). \\
+$\cin, \cout$ & 프레임 $t$의 내부/외부 영역 평균 (식 \eqref{eq:cin}, \eqref{eq:cout}). \\
+$\mu > 0$ & 길이/정규화 항의 가중치. \\
+$\lin, \lout > 0$ & 내부/외부 자료 충실도 항의 가중치. \\
+$\varepsilon > 0$ & Heaviside/Dirac 근사 폭 및 분모 정규화 상수. \\
+$\Heps, \deps$ & 매끄러운 Heaviside와 Dirac (식 \eqref{eq:heaviside}, \eqref{eq:dirac}). \\
+$b > 0$ & 웜스타트 좁은 띠의 폭 (식 \eqref{eq:warmstart-init}). \\
+$s \ge 0$ & \textbf{인위적} 최적화 시간. 물리적 심장 시간이 아니다. \\
+$t$ & cine 영상의 프레임 지표, 즉 실제 시점. \\
+$\kappa$ & 평균 곡률 또는 주곡률 크기의 최댓값 (문맥에 따라). \\
+$T$ & 프레임 수. \\
+$\eta$ & 인접 프레임 해의 근접성 상수 (가정 \ref{ass:small-change}). \\
+$m, L$ & 국소 PL 상수와 Lipschitz 상수 (가정 \ref{ass:pl}). \\
+$\rho = 1-\alpha m$ & 선형 수렴 비율 (보조정리 \ref{lem:linear-conv}). \\
+\bottomrule
+\end{longtable}
+
+\section{서펠 기하}
+
+서펠은 총 $N$개이며 지표 $i=1,\dots,N$로 센다.
+
+\begin{longtable}{@{}lp{10.2cm}@{}}
+\toprule
+기호 & 의미 \\
+\midrule
+\endhead
+$\anchor^t_i \in \dom$ & 서펠 $i$의 프레임 $t$에서의 anchor(원반 중심). \\
+$e^t_{i,1}, e^t_{i,2} \in \Real^3$ & 두 접선 축. 서로 직교하는 단위 벡터. \\
+$s_{i,1}, s_{i,2} > 0$ & 두 접선 축 방향의 scale. \textbf{법선방향 scale은 없다.} \\
+$\amp^t_i \in \Real$ & 외형 진폭. $\amp^0_i + \Delta\amp^t_i$ (식 \eqref{eq:amplitude-split}). \\
+$\opa^t_i \in [0,1]$ & 불투명도. \\
+$\nrm^t_i \in \Real^3$ & 단위 법선 (식 \eqref{eq:unit-normal}). \\
+$\framemat^t_i \in \Real^{3\times2}$ & 접평면 프레임 행렬 (식 \eqref{eq:frame}). \\
+$\scalemat_i \in \Real^{2\times2}$ & $\operatorname{diag}(s_{i,1},s_{i,2})$. \\
+$u \in \Real^2$ & 서펠 국소 좌표 (식 \eqref{eq:surfel-point}, \eqref{eq:local-coord}). \\
+$\Gcan$ & 정준 서펠 집합 (식 \eqref{eq:canonical-set}). \\
+$\store$ & 저장 표현 (식 \eqref{eq:store}). \\
+$K_p$ & 정사영 반복 횟수 (식 \eqref{eq:projection-iter}). \\
+$\psi$ & 이전 접선 축과 새 법선 사이의 각 (명제 \ref{prop:degeneracy}). \\
+$\delta$ & 접평면 프레임의 면내 정렬 오차각 (명제 \ref{prop:aniso}). \\
+\bottomrule
+\end{longtable}
+
+\section{렌더링과 지표}
+
+\begin{longtable}{@{}lp{10.2cm}@{}}
+\toprule
+기호 & 의미 \\
+\midrule
+\endhead
+$\camc \in \Real^3$ & 카메라 중심. \\
+$\raydir \in \Real^3$ & 화소 $q$ 방향의 \textbf{단위} 광선 벡터. \\
+$\depthq^t_i(q)$ & 광선--서펠 교차 깊이 (mm) (식 \eqref{eq:ray-plane}). \\
+$\alphaq^t_i(q)$ & 화소 불투명도 (식 \eqref{eq:alpha}). \\
+$w_i(q)$ & 투과율 가중치 (식 \eqref{eq:weights}). \\
+$\Chat_t(q)$ & 합성된 화소 값 (식 \eqref{eq:compositing}). \\
+$A_t$ & 렌더링 행렬. 진폭에 대해 선형 (명제 \ref{prop:linearity}). \\
+$W$ & 화소 가중 행렬 (보통 심장 ROI). \\
+$\lambda_a, \lambda_T$ & 잔차의 Tikhonov 및 시간 정칙화 계수. \\
+$r$ & 저계수 잔차의 계수 (식 \eqref{eq:lowrank}). \\
+$c_0$ & 스침각 컷오프 (명제 \ref{prop:ray-plane}). \\
+$\Esurf$ & 표면 정렬 오차 (식 \eqref{eq:e-surf}). \\
+$\Eflicker$ & 시간적 흔들림 (식 \eqref{eq:flicker}). \\
+$\Sfull, \Sours, \CR$ & 저장량과 압축비 (식 \eqref{eq:s-full}--\eqref{eq:cr}). \\
+$P_{2D}, P_r$ & 서펠당, 잔차당 parameter 수. \\
+$\beta \in [0,1]$ & 중간 시점 보간 계수 (식 \eqref{eq:interpolation}). \\
+$\omega$ & 인접 프레임 경사 사이의 각 (명제 \ref{prop:interp-eikonal}). \\
+\bottomrule
+\end{longtable}

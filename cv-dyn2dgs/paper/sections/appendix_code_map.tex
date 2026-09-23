@@ -1,0 +1,133 @@
+\chapter{수식과 구현의 대응}
+\label{app:code-map}
+
+본 부록은 원고의 각 수식 및 정리를 구현의 어느 위치가 실현하는지 명시한다. 이 대응이
+없으면 원고와 구현이 시간이 지나며 조용히 어긋난다.
+
+\section{Level-set과 Chan--Vese}
+
+\begin{longtable}{@{}p{3.6cm}p{4.6cm}p{5.2cm}@{}}
+\toprule
+수식/결과 & 모듈 & 함수 \\
+\midrule
+\endhead
+식 \eqref{eq:heaviside}, \eqref{eq:dirac} & \texttt{levelset/operators.py}
+  & \texttt{heaviside\_eps}, \texttt{dirac\_eps} \\
+식 \eqref{eq:forward-diff}--\eqref{eq:backward-div} & \texttt{levelset/operators.py}
+  & \texttt{forward\_diff}, \texttt{backward\_diff}, \texttt{central\_diff},
+    \texttt{gradient\_central}, \texttt{divergence\_backward}, \texttt{curvature} \\
+식 \eqref{eq:cv-energy} & \texttt{levelset/operators.py} & \texttt{chanvese\_energy} \\
+식 \eqref{eq:cin}, \eqref{eq:cout} & \texttt{levelset/operators.py} & \texttt{region\_means} \\
+식 \eqref{eq:gradient-flow} & \texttt{levelset/operators.py} & \texttt{chanvese\_speed} \\
+식 \eqref{eq:euler-update}, \eqref{eq:cfl} & \texttt{levelset/chanvese.py} & \texttt{solve\_frame} \\
+식 \eqref{eq:warmstart-init} & \texttt{levelset/chanvese.py}
+  & \texttt{solve\_sequence} (\texttt{warm\_start}), \texttt{\_bbox\_from\_mask} \\
+정리 \ref{thm:warmstart} 의 $K(e_0)$ & \texttt{levelset/chanvese.py}
+  & \texttt{solve\_frame(reference\_phi=..., tol\_to\_reference=...)} \\
+명제 \ref{prop:newton-steps}의 재초기화 & \texttt{levelset/sdf.py} & \texttt{reinitialize} \\
+식 \eqref{eq:interpolation} & \texttt{levelset/sdf.py} & \texttt{interpolate\_levelsets} \\
+표면 추출 & \texttt{levelset/mesh\_extract.py} & \texttt{marching\_tetrahedra} \\
+\bottomrule
+\end{longtable}
+
+\section{서펠 기하}
+
+\begin{longtable}{@{}p{3.6cm}p{4.6cm}p{5.2cm}@{}}
+\toprule
+수식/결과 & 모듈 & 함수 \\
+\midrule
+\endhead
+식 \eqref{eq:canonical-set} & \texttt{surfel/model.py} & \texttt{SurfelSet2D} \\
+식 \eqref{eq:store} & \texttt{pipeline/precompute.py} & \texttt{PrecomputedModel} \\
+식 \eqref{eq:scale-init}, \eqref{eq:curvature-scale} & \texttt{surfel/canonical.py}
+  & \texttt{initialize\_canonical\_surfels} \\
+식 \eqref{eq:unit-normal} & \texttt{surfel/canonical.py} & \texttt{surface\_normals\_at} \\
+식 \eqref{eq:minimal-step}, \eqref{eq:projection-iter} & \texttt{surfel/projection.py}
+  & \texttt{project\_to\_surface} \\
+식 \eqref{eq:e-surf} & \texttt{surfel/projection.py}, \texttt{metrics/segmentation.py}
+  & \texttt{e\_surf} \\
+보조정리 \ref{lem:quadratic}의 잔차 이력 & \texttt{surfel/projection.py}
+  & \texttt{ProjectionResult.residual\_history} \\
+식 \eqref{eq:transport-project}, \eqref{eq:transport-normalize} & \texttt{surfel/transport.py}
+  & \texttt{transport\_tangent\_frame} \\
+명제 \ref{prop:degeneracy}의 퇴화 처리 & \texttt{surfel/transport.py}
+  & \texttt{degeneracy\_thresh}, \texttt{TransportDiagnostics} \\
+밀도 제어 (제 \ref{sec:transport}절) & \texttt{surfel/density.py}
+  & \texttt{tangential\_repulsion}, \texttt{densify}, \texttt{prune} \\
+\bottomrule
+\end{longtable}
+
+\section{렌더링}
+
+\begin{longtable}{@{}p{3.6cm}p{4.6cm}p{5.2cm}@{}}
+\toprule
+수식/결과 & 모듈 & 함수 \\
+\midrule
+\endhead
+식 \eqref{eq:ray}--\eqref{eq:compositing} & \texttt{render/raster2dgs.py} & \texttt{render\_2dgs} \\
+제 \ref{sec:impl-decisions}절의 참조 구현 & \texttt{render/raster2dgs.py}
+  & \texttt{render\_2dgs\_reference} \\
+식 \eqref{eq:weights}, 명제 \ref{prop:linearity} & \texttt{render/raster2dgs.py}
+  & \texttt{render\_weights}, \texttt{WeightMatrix} \\
+명제 \ref{prop:ray-plane}의 컷오프 & \texttt{render/raster2dgs.py}
+  & \texttt{RenderConfig.cull\_cos} \\
+식 \eqref{eq:distortion-surrogate} & \texttt{render/raster2dgs.py} & \texttt{\_distortion} \\
+명제 \ref{prop:perspective}의 아핀 비교 & \texttt{render/raster3dgs.py} & \texttt{render\_thin\_3dgs} \\
+mesh 기준선 (제 \ref{sec:baselines}절) & \texttt{render/mesh\_render.py} & \texttt{render\_mesh} \\
+감독 신호 정의 (제 \ref{sec:impl-decisions}절) & \texttt{render/raymarch.py}
+  & \texttt{raymarch\_levelset} \\
+카메라 모델 & \texttt{render/camera.py}
+  & \texttt{Camera.orbit}, \texttt{Camera.from\_slice\_plane} \\
+식 \eqref{eq:total-loss} & \texttt{losses.py} & \texttt{total\_loss} \\
+\bottomrule
+\end{longtable}
+
+\section{잔차와 저장}
+
+\begin{longtable}{@{}p{3.6cm}p{4.6cm}p{5.2cm}@{}}
+\toprule
+수식/결과 & 모듈 & 함수 \\
+\midrule
+\endhead
+식 \eqref{eq:residual-ls}, \eqref{eq:normal-equations} & \texttt{residual/solver.py}
+  & \texttt{solve\_residual}, \texttt{conjugate\_gradient} \\
+식 \eqref{eq:cond-bound} & \texttt{residual/solver.py}
+  & \texttt{\_estimate\_sigma\_max}, \texttt{ResidualResult.condition\_bound} \\
+식 \eqref{eq:lowrank}, 명제 \ref{prop:lowrank} & \texttt{residual/lowrank.py}
+  & \texttt{compress\_residual}, \texttt{rank\_for\_error} \\
+식 \eqref{eq:s-full}--\eqref{eq:cr} & \texttt{metrics/storage.py} & \texttt{storage\_report} \\
+식 \eqref{eq:breakeven} & \texttt{metrics/storage.py}
+  & \texttt{StorageReport.break\_even\_surface\_bytes\_per\_frame} \\
+직렬화 & \texttt{pipeline/storage\_io.py}
+  & \texttt{save\_model}, \texttt{pack\_narrow\_band} \\
+\bottomrule
+\end{longtable}
+
+\section{파이프라인, 지표, 실험}
+
+\begin{longtable}{@{}p{3.6cm}p{4.6cm}p{5.2cm}@{}}
+\toprule
+수식/결과 & 모듈 & 함수 \\
+\midrule
+\endhead
+제 \ref{sec:pipeline}절의 7단계 & \texttt{pipeline/precompute.py} & \texttt{precompute} \\
+식 \eqref{eq:cost-ours}의 네 항 & \texttt{pipeline/precompute.py}
+  & \texttt{FrameRecord.per\_frame\_update\_ms} \\
+식 \eqref{eq:frame-budget} & \texttt{pipeline/playback.py}
+  & \texttt{PlaybackEngine.step\_to}, \texttt{FrameTiming} \\
+제 \ref{sec:seek-problem}절의 탐색 문제 & \texttt{pipeline/playback.py}
+  & \texttt{compare\_projection\_modes} \\
+식 \eqref{eq:flicker} & \texttt{metrics/photometric.py} & \texttt{flicker}, \texttt{temporal\_report} \\
+식 \eqref{eq:ef} & \texttt{metrics/clinical.py} & \texttt{volume\_curve\_report} \\
+팬텀 (제 \ref{sec:phantom}절) & \texttt{data/phantom.py}
+  & \texttt{make\_phantom}, \texttt{ellipsoid\_sdf} \\
+RQ1--RQ6 & \texttt{experiments/research\_questions.py} & \texttt{rq1\_...}--\texttt{rq6\_...} \\
+제 \ref{sec:ablation-design}절 & \texttt{experiments/ablations.py}
+  & \texttt{ABLATIONS}, \texttt{spacing\_ablation} \\
+표 \ref{tab:error-metric}의 수치 확인 & \texttt{experiments/theory\_checks.py}
+  & \texttt{run\_all\_checks} \\
+제 \ref{sec:kernel-verification}절 & \texttt{scripts/verify\_kernels.py} & --- \\
+제 \ref{sec:impl-status}절의 스모크 & \texttt{cvdyn2dgs/smoke.py} & \texttt{run\_smoke} \\
+제 \ref{ch:results}장의 표 생성 & \texttt{scripts/make\_tables.py} & --- \\
+\bottomrule
+\end{longtable}

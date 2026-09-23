@@ -1,0 +1,96 @@
+\chapter{논의}
+\label{ch:discussion}
+
+\ifdraftmode
+\begin{center}
+\fcolorbox{red}{red!5}{%
+\begin{minipage}{0.93\linewidth}
+\small
+\textcolor{red}{\textbf{본 장의 상태}}\par\smallskip
+결과가 존재하지 않으므로 본 장은 결과 \emph{해석}을 담을 수 없다. 대신 결과를
+보기 전에 확정해 두는 \textbf{해석 규칙}을 기술한다. 어떤 결과가 나오면 어떤 결론을
+내릴 것인지를 사전에 고정하는 것은, 결과를 본 뒤에 유리한 서사를 고르는 것을
+막는 유일한 방법이다.
+\end{minipage}}
+\end{center}
+\medskip
+\fi
+
+\section{사전에 확정한 해석 규칙}
+\label{sec:interpretation-rules}
+
+본 연구의 결과는 네 가지 중 하나로 나올 수 있으며, 각 경우의 결론을 미리 정한다.
+
+\paragraph{경우 1: 빠르고 품질 유지.}
+식 \eqref{eq:cost-hypothesis}이 성립하고, 저장량이 $\CR>1$이며, 품질이 independent
+2DGS 대비 사전 마진 안에 들어오는 경우. 이는 계산 재사용과 compact representation
+가설을 지지한다. 다만 이것만으로 mesh보다 낫다는 결론은 나오지 않는다. RQ5가 별도로
+답해야 한다.
+
+\paragraph{경우 2: 빠르지만 품질 저하.}
+비용은 줄지만 품질이 마진을 벗어나는 경우. 결론은 ``방법이 실패했다''가 아니라
+``절충점이 어디인가''이다. 잔차 계수, surfel 수, 정사영 보정 횟수에 따른 Pareto
+curve를 제시하여 어느 계산 예산에서 어떤 표현이 유리한지 보인다.
+
+\paragraph{경우 3: 2DGS가 mesh보다 이득 없음.}
+RQ5의 어떤 지표에서도 2DGS가 개선하지 못하는 경우. 이 경우의 결론은 명확하다.
+\emph{단색 또는 단순 표면 시각화에는 mesh가 더 적절하다}. 이는 유효한 연구 결과이며
+본 논문은 이를 부정적 결과로 취급하지 않는다. 그 경우에도 제 \ref{ch:method},
+\ref{ch:error}장의 이론적 기여는 유지된다. 법선 정사영과 오차 분석은 primitive 선택과
+독립적이며, mesh 정점에도 같은 방식으로 적용된다.
+
+\paragraph{경우 4: 정사영이 병목.}
+$C_{\mathrm{project}}$가 지배적인 경우. surfel 수, 정사영 반복 수, 표면 자료구조에
+따른 손익분기점을 분석한다. 특히 명제 \ref{prop:newton-steps}이 예측하는 $K_p\in\{1,2\}$가
+실제로 충분한지가 이 경우의 핵심이다.
+
+어떤 결과가 나오더라도 ``표면 변화만으로 어느 수준의 동적 Gaussian 표현을 저비용으로
+재사용할 수 있는지''는 밝힐 수 있다.
+
+\section{결과를 보기 전에 정해야 하는 것}
+
+\caveat{%
+제 \ref{sec:statistics}절에서 밝힌 대로 비열등성 마진은 본 논문에서 정하지 않았다.
+5명 규모 pilot의 측정 noise를 보고 고정해야 하며, 결과를 본 뒤에 정하면 검정이
+무의미해진다. 따라서 경우 1과 경우 2를 구분하는 기준선 자체가 아직 존재하지 않는다.
+이는 원고의 미완성이 아니라 실험 설계의 필수 순서이다.}
+
+\section{예상되는 실패 모드}
+
+이론이 미리 알려 주는 취약점이 있으며, 실험은 이들을 \emph{확인하러} 설계되었다.
+
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{큰 프레임 간 이동.} 법선 정사영은 인접 프레임 사이의 이동이 작고 동일한
+  표면 분기가 유지될 때 가장 안정적이다(제 \ref{sec:tangential}절). 수축 프로파일이
+  가파른 구간에서 trust region 발동 빈도가 오를 것으로 예상된다.
+  \item \textbf{높은 곡률.} 명제 \ref{prop:planar-disk}의 $O(\kappa s^2)$ 오차는 심첨부와
+  papillary muscle 근방에서 가장 크다. 곡률 적응 scale(식 \eqref{eq:curvature-scale})이
+  이를 억제하는지가 v3 단계의 핵심 검증이다.
+  \item \textbf{밝기 비균질.} papillary muscle과 blood pool이 섞이면 Chan--Vese의
+  조각마다 상수 가정이 깨진다. 팬텀은 이를 의도적으로 포함하므로 분할 정확도의 저하가
+  관측될 것으로 예상된다.
+  \item \textbf{방향 표류.} 명제 \ref{prop:propagation}에 의해 위치는 재설정되지만 방향은
+  누적된다. 긴 시퀀스에서 $\Eflicker$가 상승하는지, 그리고 등방 원반이 실제로 이를
+  무해하게 만드는지(명제 \ref{prop:gauge}) 확인해야 한다.
+  \item \textbf{임의 탐색.} 제 \ref{sec:seek-problem}절의 순차 대 정준 정사영 격차.
+  이것이 크면 식 \eqref{eq:store}의 저장량 주장과 임의 탐색 기능이 양립하지 않는다.
+\end{itemize}
+
+\section{이론과 구현의 관계에 대하여}
+
+본 연구에서 구현은 이론의 부속물이 아니었다. 구현 과정에서 이론 문서가 다루지 않은
+세 가지 질문이 강제로 드러났다.
+
+첫째, \emph{감독 신호가 정확히 무엇인가}. 제안서는 ``알려진 slice plane의 mask, depth,
+normal, intensity''로 제한했으나 그것을 계산 가능한 목표로 바꾸는 정의가 없었다.
+제 \ref{sec:impl-decisions}절의 광선 행진 정의가 그 공백을 채운다.
+
+둘째, \emph{기하가 최적화되지 않음을 어떻게 보장하는가}. 이론적으로는 자명하지만
+구현에서는 설정 하나로 깨질 수 있다. 버퍼 등록이 이를 구조적으로 만든다.
+
+셋째, \emph{저장 표현이 임의 탐색을 지원하는가}. 식 \eqref{eq:store}만 보면 자명해
+보이지만, 전처리의 순차 정사영과 재생의 직접 정사영이 다르다는 사실은 구현하지
+않으면 드러나지 않는다.
+
+이 세 가지는 이론의 오류가 아니라 이론이 명시하지 않은 자유도였다. 구현이 그것을
+특정 방식으로 고정했고, 본 논문은 그 선택을 명시적으로 기록하였다.

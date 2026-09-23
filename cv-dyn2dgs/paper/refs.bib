@@ -1,0 +1,459 @@
+% ===================================================================
+%  References for the CV-Dyn2DGS thesis.
+%
+%  Provenance of each entry is one of:
+%    [author-bibtex]  copied from the authors' own BibTeX (project repo or
+%                     publisher page) - highest confidence
+%    [verified]       title, venue and year checked against the publisher or
+%                     arXiv listing
+%    [unverified]     taken from the source proposal / theory document and NOT
+%                     independently confirmed; treat with suspicion
+%
+%  Four entries were found to be WRONG on verification and have been corrected;
+%  each carries a note recording what was wrong. Do not silently "restore" them.
+% ===================================================================
+
+% ---------- Variational segmentation / level sets ----------
+@article{chan2001_active,
+  author  = {Chan, Tony F. and Vese, Luminita A.},
+  title   = {Active Contours Without Edges},
+  journal = {IEEE Transactions on Image Processing},
+  volume  = {10},
+  number  = {2},
+  pages   = {266--277},
+  year    = {2001},
+  doi     = {10.1109/83.902291}
+}
+
+@article{osher1988_fronts,
+  author  = {Osher, Stanley and Sethian, James A.},
+  title   = {Fronts Propagating with Curvature-Dependent Speed:
+             Algorithms Based on {Hamilton--Jacobi} Formulations},
+  journal = {Journal of Computational Physics},
+  volume  = {79},
+  number  = {1},
+  pages   = {12--49},
+  year    = {1988}
+}
+
+@article{mumford1989_optimal,
+  author  = {Mumford, David and Shah, Jayant},
+  title   = {Optimal Approximations by Piecewise Smooth Functions and
+             Associated Variational Problems},
+  journal = {Communications on Pure and Applied Mathematics},
+  volume  = {42},
+  number  = {5},
+  pages   = {577--685},
+  year    = {1989}
+}
+
+@article{drapaca2005_segmentation,
+  author  = {Drapaca, Corina S. and Cardenas, Valerie and Studholme, Colin},
+  title   = {Segmentation of Tissue Boundary Evolution from Brain {MR} Image
+             Sequences Using Multi-phase Level Sets},
+  journal = {Computer Vision and Image Understanding},
+  volume  = {100},
+  number  = {3},
+  pages   = {312--329},
+  year    = {2005},
+  doi     = {10.1016/j.cviu.2005.05.001}
+}
+
+% ---------- Cardiac segmentation ----------
+@article{duan2010_realtime,
+  author  = {Duan, Qi and Angelini, Elsa D. and Laine, Andrew F.},
+  title   = {Real-time Segmentation by Active Geometric Functions},
+  journal = {Computer Methods and Programs in Biomedicine},
+  volume  = {98},
+  number  = {3},
+  pages   = {223--230},
+  year    = {2010},
+  doi     = {10.1016/j.cmpb.2009.09.001}
+}
+
+@article{queiros2014_fast,
+  author  = {Queir{\'o}s, Sandro and Barbosa, Daniel and Heyde, Brecht and
+             Morais, Pedro and Vilaça, Jo{\~a}o L. and Friboulet, Denis and
+             Bernard, Olivier and D'hooge, Jan},
+  title   = {Fast Automatic Myocardial Segmentation in {4D} Cine {CMR} Datasets},
+  journal = {Medical Image Analysis},
+  volume  = {18},
+  number  = {7},
+  pages   = {1115--1131},
+  year    = {2014},
+  doi     = {10.1016/j.media.2014.06.001}
+}
+
+% [verified] CORRECTED. The source documents cited this as "Segmentation of Left
+% and Right Ventricles in Cardiac MRI Using Active Contours, Computational and
+% Mathematical Methods in Medicine, 2017". No such paper was found. The actual
+% Avendi-Kheradvar-Jafarkhani work is the pair below: a CNN/auto-encoder
+% localiser followed by a DEFORMABLE-MODEL refinement (not a Chan-Vese region
+% term). Sec. 2.2 of this thesis was rewritten accordingly.
+@article{avendi2016_combined,
+  author  = {Avendi, Michael R. and Kheradvar, Arash and Jafarkhani, Hamid},
+  title   = {A Combined Deep-Learning and Deformable-Model Approach to Fully
+             Automatic Segmentation of the Left Ventricle in Cardiac {MRI}},
+  journal = {Medical Image Analysis},
+  year    = {2016},
+  note    = {arXiv:1512.07951}
+}
+
+@article{avendi2017_rv,
+  author  = {Avendi, Michael R. and Kheradvar, Arash and Jafarkhani, Hamid},
+  title   = {Automatic Segmentation of the Right Ventricle from Cardiac {MRI}
+             Using a Learning-Based Approach},
+  journal = {Magnetic Resonance in Medicine},
+  year    = {2017}
+}
+
+% [verified] Nature Methods 2021. The standard strong deep baseline, and the
+% drop-in alternative surface source for the layer-1 experiment of sec. 7.3.
+@article{isensee2021_nnunet,
+  author  = {Isensee, Fabian and Jaeger, Paul F. and Kohl, Simon A. A. and
+             Petersen, Jens and Maier-Hein, Klaus H.},
+  title   = {{nnU-Net}: A Self-configuring Method for Deep Learning-based
+             Biomedical Image Segmentation},
+  journal = {Nature Methods},
+  volume  = {18},
+  number  = {2},
+  pages   = {203--211},
+  year    = {2021},
+  doi     = {10.1038/s41592-020-01008-z}
+}
+
+@inproceedings{ye2025_cstm,
+  author    = {Ye, Meng and Xin, Bingyu and Axel, Leon and Metaxas, Dimitris},
+  title     = {Continuous Spatio-Temporal Memory Networks for {4D} Cardiac
+               Cine {MRI} Segmentation},
+  booktitle = {IEEE/CVF Winter Conference on Applications of Computer Vision (WACV)},
+  year      = {2025}
+}
+
+% ---------- Gaussian splatting ----------
+@article{kerbl2023_3dgs,
+  author  = {Kerbl, Bernhard and Kopanas, Georgios and Leimk{\"u}hler, Thomas
+             and Drettakis, George},
+  title   = {{3D} Gaussian Splatting for Real-Time Radiance Field Rendering},
+  journal = {ACM Transactions on Graphics},
+  volume  = {42},
+  number  = {4},
+  year    = {2023}
+}
+
+% [author-bibtex] CORRECTED entry type. The source documents listed this as an
+% ACM TOG 43(4) journal article; the authors' own BibTeX gives it as a SIGGRAPH
+% 2024 Conference Papers entry. The DOI is unchanged.
+@inproceedings{huang2024_2dgs,
+  author    = {Huang, Binbin and Yu, Zehao and Chen, Anpei and Geiger, Andreas
+               and Gao, Shenghua},
+  title     = {{2D} Gaussian Splatting for Geometrically Accurate Radiance Fields},
+  booktitle = {ACM SIGGRAPH 2024 Conference Papers},
+  publisher = {Association for Computing Machinery},
+  year      = {2024},
+  doi       = {10.1145/3641519.3657428}
+}
+
+% [author-bibtex] The other surfel formulation: a 3D Gaussian with its z-scale
+% set to zero. Directly relevant to RQ6, since it is the design CV-Dyn2DGS's
+% thin-3DGS baseline approximates. Code: github.com/turandai/gaussian_surfels
+@inproceedings{dai2024_gaussian_surfels,
+  author    = {Dai, Pinxuan and Xu, Jiamin and Xie, Wenxiang and Liu, Xinguo
+               and Wang, Huamin and Xu, Weiwei},
+  title     = {High-quality Surface Reconstruction using Gaussian Surfels},
+  booktitle = {ACM SIGGRAPH 2024 Conference Papers},
+  publisher = {Association for Computing Machinery},
+  articleno = {22},
+  numpages  = {11},
+  year      = {2024}
+}
+
+% [author-bibtex] Code: github.com/hustvl/Dynamic-2DGS
+@inproceedings{zhang2025_d2dgs,
+  author    = {Zhang, Shuai and Wu, Guanjun and Wang, Xinggang and Feng, Bin
+               and Liu, Wenyu},
+  title     = {Dynamic {2D} Gaussians: Geometrically Accurate Radiance Fields
+               for Dynamic Objects},
+  booktitle = {ACM International Conference on Multimedia},
+  year      = {2025},
+  doi       = {10.1145/3746027.3755328},
+  note      = {arXiv:2409.14072}
+}
+
+% [author-bibtex] THE NEAREST NEIGHBOUR IN METHOD SPACE, and the comparison the
+% proposal did not name: canonical Gaussian *surfels*, per-frame initialisation
+% from the previous frame, adaptive densification, and an explicit temporal
+% consistency term on curvature maps to suppress jitter - i.e. the same three
+% mechanisms as CV-Dyn2DGS, but with geometry learned instead of pinned to a
+% variational surface. Reports 38 s/frame training, so its cost is directly
+% comparable to the precompute of sec. 7.5. Code: github.com/fraunhoferhhi/AT-GS
+@inproceedings{chen2025_atgs,
+  author    = {Chen, Decai and Oberson, Brianne and Feldmann, Ingo and
+               Schreer, Oliver and Hilsmann, Anna and Eisert, Peter},
+  title     = {Adaptive and Temporally Consistent Gaussian Surfels for
+               Multi-View Dynamic Reconstruction},
+  booktitle = {IEEE/CVF Winter Conference on Applications of Computer Vision (WACV)},
+  pages     = {742--752},
+  year      = {2025},
+  note      = {arXiv:2411.06602}
+}
+
+% [author-bibtex] Deformation-field dynamic 3DGS; the learned-deformation
+% alternative to per-frame level sets. Code: github.com/yihua7/SC-GS uses it.
+@article{yang2023_deformable3dgs,
+  author  = {Yang, Ziyi and Gao, Xinyu and Zhou, Wen and Jiao, Shaohui and
+             Zhang, Yuqing and Jin, Xiaogang},
+  title   = {Deformable {3D} Gaussians for High-Fidelity Monocular Dynamic
+             Scene Reconstruction},
+  journal = {arXiv preprint arXiv:2309.13101},
+  year    = {2023}
+}
+
+% [author-bibtex] Mesh extracted from dynamic Gaussians with temporal vertex
+% correspondence - the mesh-side analogue of this thesis's RQ5 baseline.
+@article{liu2024_dgmesh,
+  author  = {Liu, Isabella and Su, Hao and Wang, Xiaolong},
+  title   = {Dynamic Gaussians Mesh: Consistent Mesh Reconstruction from
+             Monocular Videos},
+  journal = {arXiv preprint arXiv:2404.12379},
+  year    = {2024}
+}
+
+% [author-bibtex] Compact spacetime primitives for real-time dynamic playback;
+% the cost/quality reference point for RQ4.
+@inproceedings{li2024_stg,
+  author    = {Li, Zhan and Chen, Zhang and Li, Zhong and Xu, Yi},
+  title     = {Spacetime Gaussian Feature Splatting for Real-Time Dynamic
+               View Synthesis},
+  booktitle = {IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {8508--8520},
+  year      = {2024}
+}
+
+@article{wang2024_st2dgs,
+  author  = {Wang, Shuo and Huang, Binbin and Wang, Ruoyu and Gao, Shenghua},
+  title   = {Space-time {2D} Gaussian Splatting for Accurate Surface
+             Reconstruction under Complex Dynamic Scenes},
+  journal = {arXiv preprint arXiv:2409.18852},
+  year    = {2024}
+}
+
+% [author-bibtex] Code: github.com/hustvl/4DGaussians
+@inproceedings{wu2024_4dgs,
+  author    = {Wu, Guanjun and Yi, Taoran and Fang, Jiemin and Xie, Lingxi and
+               Zhang, Xiaopeng and Wei, Wei and Liu, Wenyu and Tian, Qi and
+               Wang, Xinggang},
+  title     = {{4D} Gaussian Splatting for Real-Time Dynamic Scene Rendering},
+  booktitle = {IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {20310--20320},
+  year      = {2024}
+}
+
+% ---------- Cardiac Gaussian / mesh ----------
+% [author-bibtex] CORRECTED: full author list, page range, and - importantly -
+% the code IS publicly released at github.com/windrise/Dyna3DGR. The proposal
+% assumed reproduction was infeasible; that assumption no longer holds for anyone
+% with a GPU. See sec. 7.3 and the note in sec. 2.5.
+@inproceedings{fu2025_dyna3dgr,
+  author    = {Fu, Xueming and Wu, Pei and Li, Yingtai and Luo, Xin and
+               Jiang, Zihang and Mei, Junhao and Lu, Jian and Teng, Gao-Jun and
+               Zhou, Shaohua Kevin},
+  title     = {{Dyna3DGR}: {4D} Cardiac Motion Tracking with Dynamic {3D}
+               Gaussian Representation},
+  booktitle = {Medical Image Computing and Computer Assisted Intervention (MICCAI)},
+  pages     = {164--174},
+  publisher = {Springer},
+  year      = {2025},
+  note      = {arXiv:2507.16608}
+}
+
+@article{meng2022_mesh,
+  author  = {Meng, Qingjie and Bai, Wenjia and Liu, Tianrui and
+             O'Regan, Declan P. and Rueckert, Daniel},
+  title   = {Mesh-based {3D} Motion Tracking in Cardiac {MRI} Using Deep Learning},
+  journal = {arXiv preprint arXiv:2209.02004},
+  year    = {2022}
+}
+
+@article{liu2026_personalized,
+  author  = {Liu, Xiaoyue and Cang, Dongyue and Yuan, Xin and
+             Chan, Mark Y. Y. and Sia, Ching-Hui and Li, Lei},
+  title   = {Personalized {4D} Whole-Heart Mesh Reconstruction from Cine {MRI}
+             via Multi-Scale Temporal Modeling and Differentiable Contour Rendering},
+  journal = {arXiv preprint arXiv:2607.01952},
+  year    = {2026}
+}
+
+@article{dillon2026_bivme,
+  author  = {Dillon, Joshua and others},
+  title   = {{biv-me}: Open-source Software for Generating Time-varying
+             Biventricular Meshes from Cine Cardiovascular Magnetic Resonance
+             Imaging with Multi-cohort Validation},
+  journal = {Medical Image Analysis},
+  year    = {2026},
+  doi     = {10.1016/j.media.2026.104252}
+}
+
+% ---------- Medical Gaussian splatting ----------
+@inproceedings{li2025_clipgs,
+  author    = {Li, Chengkun and others},
+  title     = {{ClipGS}: Clippable Gaussian Splatting for Interactive
+               Cinematic Visualization of Volumetric Medical Data},
+  booktitle = {Medical Image Computing and Computer Assisted Intervention (MICCAI)},
+  year      = {2025}
+}
+
+@inproceedings{kong2026_gaussianpile,
+  author    = {Kong, Dewei and others},
+  title     = {{GaussianPile}: A Unified Sparse Gaussian Splatting Framework
+               for Slice-based Volumetric Reconstruction},
+  booktitle = {IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2026}
+}
+
+% [unverified] arXiv:2606.26236 exists with this title, but the author list could
+% not be confirmed (arxiv.org was unreachable from the authoring environment).
+% Note also that the paper's subject is SPINAL MRI stenosis grading, not cardiac;
+% it is positioning, not a comparison target.
+@article{park2026_rendering,
+  author  = {Park, Ryan Y. and others},
+  title   = {Rendering Novel Views of {MRI} Using {3D} Gaussian Splatting},
+  journal = {arXiv preprint arXiv:2606.26236},
+  year    = {2026}
+}
+
+% [author-bibtex] The most directly comparable storage-and-FPS claim in the
+% medical-visualisation literature: path-traced volume data converted to a
+% compressed 3DGS representation under 70 MB, rendered at 60 FPS. A static
+% volume, not a time series - which is precisely the axis this thesis adds.
+% Code: github.com/KeKsBoTer/cinematic-gaussians
+@inproceedings{niedermayr2024_cinematic,
+  author    = {Niedermayr, Simon and Neuhauser, Christoph and Petkov, Kaloian
+               and Engel, Klaus and Westermann, R{\"u}diger},
+  title     = {Application of {3D} Gaussian Splatting for Cinematic Anatomy on
+               Consumer Class Devices},
+  booktitle = {Vision, Modeling, and Visualization (VMV)},
+  year      = {2024},
+  note      = {arXiv:2404.11285}
+}
+
+% ---------- Datasets ----------
+@article{bernard2018_acdc,
+  author  = {Bernard, Olivier and Lalande, Alain and Zotti, Clement and
+             Cervenansky, Frederick and others},
+  title   = {Deep Learning Techniques for Automatic {MRI} Cardiac
+             Multi-structures Segmentation and Diagnosis: Is the Problem Solved?},
+  journal = {IEEE Transactions on Medical Imaging},
+  volume  = {37},
+  number  = {11},
+  pages   = {2514--2525},
+  year    = {2018}
+}
+
+% [verified] The FIRST M&Ms challenge (LV and myocardium), IEEE TMI 40(12), 2021 -
+% confirming that the correction below was needed: this Campello-first-authored TMI paper
+% is a different challenge and a different dataset from the Martin-Isla-first-authored
+% JBHI 2023 M&Ms-2 paper. Cited as an optional additional external domain in sec. 7.4.
+@article{campello2021_mnms,
+  author  = {Campello, V{\'i}ctor M. and Gkontra, Polyxeni and Izquierdo, Cristian and
+             Mart{\'i}n-Isla, Carlos and Sojoudi, Alireza and Full, Peter M. and
+             Maier-Hein, Klaus and Zhang, Yao and He, Zhiqiang and Ma, Jun and others},
+  title   = {Multi-Centre, Multi-Vendor and Multi-Disease Cardiac Segmentation:
+             The {M\&Ms} Challenge},
+  journal = {IEEE Transactions on Medical Imaging},
+  volume  = {40},
+  number  = {12},
+  pages   = {3543--3554},
+  year    = {2021}
+}
+
+% [verified] CORRECTED. The source documents attributed this to "Campello et al.,
+% Medical Image Analysis, 2023". The M&Ms-2 challenge paper is first-authored by
+% Martin-Isla and appeared in IEEE JBHI 27(7). Campello is the second author; the
+% 2021 IEEE TMI paper by Campello et al. is the *first* M&Ms challenge (LV and
+% myocardium), which is a different dataset. Key renamed to match the author.
+@article{martinisla2023_mnms2,
+  author  = {Mart{\'i}n-Isla, Carlos and Campello, V{\'i}ctor M. and
+             Izquierdo, Cristian and Kushibar, Kaisar and
+             Sendra-Balcells, Carla and Gkontra, Polyxeni and others},
+  title   = {Deep Learning Segmentation of the Right Ventricle in Cardiac
+             {MRI}: The {M\&Ms} Challenge},
+  journal = {IEEE Journal of Biomedical and Health Informatics},
+  volume  = {27},
+  number  = {7},
+  pages   = {3302--3313},
+  year    = {2023}
+}
+
+@article{tobongomez2013_benchmarking,
+  author  = {Tobon-Gomez, Catalina and De Craene, Mathieu and McLeod, Kristin
+             and others},
+  title   = {Benchmarking Framework for Myocardial Tracking and Deformation
+             Algorithms: An Open Access Database},
+  journal = {Medical Image Analysis},
+  volume  = {17},
+  number  = {6},
+  pages   = {632--648},
+  year    = {2013}
+}
+
+% ---------- Optimisation and linear algebra ----------
+@article{polyak1963_gradient,
+  author  = {Polyak, Boris T.},
+  title   = {Gradient Methods for the Minimisation of Functionals},
+  journal = {USSR Computational Mathematics and Mathematical Physics},
+  volume  = {3},
+  number  = {4},
+  pages   = {864--878},
+  year    = {1963}
+}
+
+@inproceedings{karimi2016_linear,
+  author    = {Karimi, Hamed and Nutini, Julie and Schmidt, Mark},
+  title     = {Linear Convergence of Gradient and Proximal-Gradient Methods
+               under the {Polyak--{\L}ojasiewicz} Condition},
+  booktitle = {Machine Learning and Knowledge Discovery in Databases (ECML PKDD)},
+  pages     = {795--811},
+  year      = {2016}
+}
+
+@book{nesterov2004_introductory,
+  author    = {Nesterov, Yurii},
+  title     = {Introductory Lectures on Convex Optimization: A Basic Course},
+  publisher = {Kluwer Academic Publishers},
+  year      = {2004}
+}
+
+@book{nocedal2006_numerical,
+  author    = {Nocedal, Jorge and Wright, Stephen J.},
+  title     = {Numerical Optimization},
+  edition   = {2nd},
+  publisher = {Springer},
+  year      = {2006}
+}
+
+@book{golub2013_matrix,
+  author    = {Golub, Gene H. and Van Loan, Charles F.},
+  title     = {Matrix Computations},
+  edition   = {4th},
+  publisher = {Johns Hopkins University Press},
+  year      = {2013}
+}
+
+@book{horn2013_matrix,
+  author    = {Horn, Roger A. and Johnson, Charles R.},
+  title     = {Matrix Analysis},
+  edition   = {2nd},
+  publisher = {Cambridge University Press},
+  year      = {2013}
+}
+
+@article{eckart1936_approximation,
+  author  = {Eckart, Carl and Young, Gale},
+  title   = {The Approximation of One Matrix by Another of Lower Rank},
+  journal = {Psychometrika},
+  volume  = {1},
+  number  = {3},
+  pages   = {211--218},
+  year    = {1936}
+}

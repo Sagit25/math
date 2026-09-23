@@ -1,0 +1,181 @@
+\chapter{기호와 문제 정의}
+\label{ch:notation}
+
+\section{입력}
+
+한 환자의 cine CMR을
+\begin{equation}
+  \imgt : \dom \subset \Real^3 \to \Real, \qquad t = 0, 1, \dots, T-1
+  \label{eq:input}
+\end{equation}
+로 나타낸다. $\imgt(x)$는 시간 $t$와 물리 좌표 $x$에서의 MRI 밝기이다. 복셀 간격은
+\begin{equation}
+  \spacing = (h_x, h_y, h_z)
+  \label{eq:spacing}
+\end{equation}
+이며, 단기축 cine CMR에서는 일반적으로 $h_z \ge h_x \approx h_y$이다. 모든 거리,
+곡률, 표면 오차는 복셀 지표가 아니라 \textbf{mm 단위}로 계산한다. 이 규약은 선택이
+아니다. $h_z/h_x \approx 6$인 격자에서 복셀 지표로 계산한 표면 거리는 물리적 의미가
+없다.
+
+$\dom$은 유계 열린 영역이고 경계 $\partial\dom$은 조각마다 매끄럽다고 가정한다.
+각 $\imgt$는 유계이며 제곱적분가능하다고 가정한다.
+
+\section{표면의 level-set 표현}
+
+각 프레임의 심장 표면은 level-set 함수 $\levt$의 영도집합으로 표현한다.
+\begin{equation}
+  \surft = \{\, x \in \dom : \levt(x) = 0 \,\}.
+  \label{eq:levelset}
+\end{equation}
+
+부호 규약은 다음과 같다.
+\begin{equation}
+  \levt(x) > 0 : \text{심장 내부}, \qquad
+  \levt(x) < 0 : \text{심장 외부}, \qquad
+  \levt(x) = 0 : \text{심장 표면}.
+  \label{eq:sign}
+\end{equation}
+
+\caveat{%
+식 \eqref{eq:sign}은 신호 처리 문헌에서 흔한 ``내부가 음수'' 규약과 \textbf{반대}이다.
+본 논문과 구현 전체에서 이 규약을 일관되게 사용하며, 구현의 모든 비교 연산은 이
+규약에 대해 명시적으로 작성되었다. 부호를 뒤집으면 경사 흐름의 구동력 방향이
+반대가 되어 표면이 발산한다.}
+
+$\levt$가 $\surft$ 근방에서 매끄럽고 $\gradh\levt \ne 0$이면 단위 법선과 평균 곡률은
+\begin{equation}
+  \nrm = \frac{\gradh\levt}{\norm{\gradh\levt}}, \qquad
+  \kappa = \divh\!\left(\frac{\gradh\levt}{\norm{\gradh\levt}}\right)
+  \label{eq:normal-curvature}
+\end{equation}
+로 주어진다. 식 \eqref{eq:sign}의 규약에서 $\gradh\levt$는 \emph{내부를 향한다}.
+
+\section{목표 구조의 범위}
+
+기본 연구 범위에서는 좌심실 blood pool 또는 좌심실 내막 표면처럼 비교적 명확한
+하나의 구조를 사용한다. 전체 좌/우심실 및 심근은 multiphase level-set을 요구하는
+확장 범위로 둔다. 구현의 실제 데이터 로더는 좌심실 이외의 구조를 요청하면
+조용히 다른 것을 반환하지 않고 예외를 발생시킨다.
+
+\section{출력과 저장 표현}
+\label{sec:storage-def}
+
+첫 프레임에서 생성한 정준 2D Gaussian surfel 집합을
+\begin{equation}
+  \Gcan = \bigl\{\, g^0_i = (\anchor^0_i,\ e^0_{i,1},\ e^0_{i,2},\
+  s_{i,1},\ s_{i,2},\ \amp^0_i,\ \opa^0_i) \,\bigr\}_{i=1}^{N}
+  \label{eq:canonical-set}
+\end{equation}
+로 둔다. 각 성분의 뜻은 다음과 같다.
+
+\begin{itemize}[leftmargin=2em]
+  \item $\anchor^0_i \in \dom$: surfel의 중심(anchor).
+  \item $e^0_{i,1}, e^0_{i,2} \in \Real^3$: 접평면을 이루는 서로 직교하는 두 단위
+  접선축.
+  \item $s_{i,1}, s_{i,2} > 0$: 두 접선축 방향의 scale. \textbf{법선방향 scale은 없다.}
+  \item $\amp^0_i \in \Real$: MRI-derived 외형 진폭.
+  \item $\opa^0_i \in [0,1]$: 불투명도.
+\end{itemize}
+
+법선방향 scale의 부재가 이 표현의 핵심 구조적 성질이다. primitive는 두께가 없는
+2차원 원반이며 3차원 타원체가 아니다. 법선 방향 정보는 scale이 아니라 단위 법선
+$\nrm^t_i$와 접평면 프레임 $\framemat^t_i$로만 표현된다.
+
+최종 저장 표현은
+\begin{equation}
+  \boxed{\;
+  \store = \Bigl\{\, \Gcan,\ \{\surft\}_{t=0}^{T-1},\ \{\Delta \amp_t\}_{t=0}^{T-1} \,\Bigr\}
+  \;}
+  \label{eq:store}
+\end{equation}
+이다. 즉 dense deformation field를 저장하지 않는다. 프레임별 위치와 회전 전체를
+저장하는 대신, 재생 시 현재 표면으로 anchor를 법선 정사영하고 표면 법선으로 접평면을
+계산하여 surfel의 위치와 방향을 갱신한다.
+
+\caveat{%
+식 \eqref{eq:store}에 프레임별 anchor가 없다는 사실은 임의 시점 탐색(seek)에 대한
+비자명한 함의를 가진다. 전처리는 anchor를 $\anchor^{t-1}\to\anchor^t$로 \emph{순차}
+정사영하지만, 저장된 것만으로 프레임 $t$로 바로 이동하려면 \emph{정준} anchor를
+$\surft$로 직접 정사영해야 한다. 두 경로는 동일하지 않다. 제
+\ref{sec:seek-problem}절에서 이 문제를 명시하고 구현에서 두 방식을 모두 제공하여
+그 차이를 측정 가능하게 하였다.}
+
+\section{Real-time의 정의}
+
+본 논문에서 real-time은 MRI scanner가 신호를 획득하는 동시에 처리한다는 뜻이
+아니다. 환자별 cine CMR에 대해 한 번의 전처리를 완료한 후, 저장된 표현을 사용하여
+다음 상호작용을 30 FPS 이상으로 수행하는 것을 뜻한다.
+
+\begin{itemize}[leftmargin=2em]
+  \item 심장주기 재생 및 정지,
+  \item 자유로운 카메라 회전과 확대,
+  \item MRI 영상과 3차원 심장 표현의 동시 표시,
+  \item 선택적 clipping과 표면 depth/normal map 관찰.
+\end{itemize}
+
+따라서 전처리시간과 재생시간은 별도의 지표로 측정한다. 전처리가 느려도 viewer는
+실시간일 수 있으며, 반대로 전처리가 빨라도 렌더링이 느릴 수 있다.
+
+\section{매끄러운 Heaviside와 Dirac 근사}
+
+영역의 지시 함수와 경계 측도를 변분 계산에 쓸 수 있게 매끄럽게 근사한다. 정규화
+폭 $\varepsilon > 0$에 대하여
+\begin{align}
+  \Heps(z) &= \frac{1}{2}\left(1 + \frac{2}{\pi}\arctan\frac{z}{\varepsilon}\right),
+  \label{eq:heaviside}\\
+  \deps(z) &= \Heps'(z)
+  = \frac{1}{\pi}\cdot\frac{\varepsilon}{\varepsilon^2 + z^2}
+  \label{eq:dirac}
+\end{align}
+로 정의한다.
+
+\begin{proposition}[근사의 기본 성질]
+\label{prop:heaviside}
+식 \eqref{eq:heaviside}, \eqref{eq:dirac}에 대하여 다음이 성립한다.
+\begin{enumerate}[label=(\roman*)]
+  \item 모든 $\varepsilon>0$에서 $\Heps \in C^\infty(\Real)$이고
+  $0 < \Heps < 1$이며 $\Heps$는 순증가한다.
+  \item $\int_\Real \deps(z)\,dz = 1$.
+  \item $\varepsilon \to 0^+$에서 $z \ne 0$인 각 점에서 $\Heps(z) \to H(z)$이고,
+  분포의 의미에서 $\deps \to \delta$이다.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+(i) $\arctan$이 매끄럽고 유계이며 순증가하므로 $\Heps$도 그러하다. 치역은
+$\arctan$의 치역 $(-\pi/2,\pi/2)$로부터 $(0,1)$이다.
+
+(ii) 치환 $w = z/\varepsilon$을 쓰면
+\[
+  \int_\Real \frac{1}{\pi}\frac{\varepsilon}{\varepsilon^2+z^2}\,dz
+  = \frac{1}{\pi}\int_\Real \frac{dw}{1+w^2}
+  = \frac{1}{\pi}\bigl[\arctan w\bigr]^{\infty}_{-\infty} = 1.
+\]
+
+(iii) $z>0$이면 $\arctan(z/\varepsilon)\to\pi/2$이므로 $\Heps(z)\to1$이고, $z<0$이면
+$\to 0$이다. (ii)에 의해 $\deps$는 총질량 1을 유지하면서 원점 근방으로 질량이
+집중되므로, 임의의 유계 연속 시험함수 $\psi$에 대해 $\int \deps \psi \to \psi(0)$이다.
+\end{proof}
+
+(i)의 \emph{순 양성} $\Heps > 0$이 중요하다. 이것이 식 \eqref{eq:cin}, \eqref{eq:cout}의
+분모가 영이 되지 않음을 보장한다.
+
+\implnote{%
+식 \eqref{eq:heaviside}, \eqref{eq:dirac}는 \texttt{levelset/operators.py}의
+\texttt{heaviside\_eps}, \texttt{dirac\_eps}. 명제 \ref{prop:heaviside}의 (ii)는
+\texttt{experiments/theory\_checks.py::check\_smooth\_heaviside}에서 수치 확인.}
+
+\section{인위적 시간과 물리적 시간}
+
+본 논문에는 두 개의 시간 변수가 있으며 혼동하지 않도록 유의한다.
+
+\begin{itemize}[leftmargin=2em]
+  \item $t$: cine 영상의 \textbf{프레임 지표}, 즉 실제 심장 시간.
+  \item $s \ge 0$: \textbf{인위적 최적화 시간}. 각 고정된 프레임 $t$에 대하여 energy를
+  최소화하는 경사 하강의 진행을 매개하는 가상의 변수이며 물리적 심장 시간이 아니다.
+\end{itemize}
+
+웜스타트는 프레임 $t$에서 $s\to\infty$로 얻은 정상 상태를 프레임 $t+1$의 $s=0$
+초기값으로 넘겨주는 절차이다. surfel 기하의 위 첨자 $t$는 언제나 물리적 프레임을
+가리키며 $s$와 무관하다.

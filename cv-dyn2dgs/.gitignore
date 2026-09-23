@@ -1,0 +1,42 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+
+# experiment artefacts
+runs/
+outputs/
+*.pt
+*.pth
+*.npz
+*.nii
+*.nii.gz
+*.png
+*.svg
+*.mp4
+
+# keep committed reference results
+!results/**/*.json
+!results/**/*.csv
+
+
+# LaTeX build artefacts (paper/)
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+paper/main.pdf
+
+# ...but figures that belong to the manuscript are source, not artefacts
+!paper/figures/**

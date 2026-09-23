@@ -1,0 +1,897 @@
+\chapter{방법}
+\label{ch:method}
+
+\section{전체 파이프라인}
+\label{sec:pipeline}
+
+한 환자에 대한 처리는 전처리와 재생으로 나뉜다. 전처리는 다음 순서로 진행된다.
+
+\begin{enumerate}[leftmargin=2.2em]
+  \item 첫 프레임에서 제공된 ED label 또는 내부 seed로 3D Chan--Vese를 풀어
+  $\lev_0$을 얻는다 (제 \ref{sec:spacing-aware}절).
+  \item $\surf_0$ 위에 2D Gaussian 원반을 배치하고 MRI 밝기, 불투명도, scale을
+  맞추어 정준 2DGS $\Gcan$을 만든다 (제 \ref{sec:canonical}절).
+  \item 프레임 $t \ge 1$에서 $\lev_{t-1}$을 seed로 Chan--Vese를 짧게 수행하여
+  $\levt$를 구한다 (제 \ref{sec:warmstart}절).
+  \item 각 surfel 중심을 $\surft$의 법선 방향으로 정사영하고 (제
+  \ref{sec:projection}절), 두 접선축을 새 접평면으로 전송한다 (제
+  \ref{sec:transport}절).
+  \item 표면 이동만으로 설명되지 않는 밝기 차이를 작은 잔차로 fitting한다
+  (제 \ref{sec:residual}절).
+  \item 마지막 프레임까지 반복하고 $\store$만 저장한다 (제
+  \ref{sec:storage-breakeven}절).
+\end{enumerate}
+
+재생에서는 Chan--Vese나 비선형 최적화를 다시 수행하지 않고, 저장된 표면을 이용한
+중심/접평면 갱신과 원근 정합 래스터화만 수행한다 (제 \ref{sec:raster}절).
+
+\paragraph{계산 비용의 구조.}
+각 프레임에서 전체 2DGS를 처음부터 최적화하는 비용을 $C_{\mathrm{full}}$이라 하면
+독립 최적화의 총비용은
+\begin{equation}
+  C_{\mathrm{independent}} = T\,C_{\mathrm{full}}
+  \label{eq:cost-independent}
+\end{equation}
+이다. 제안 방법은 첫 프레임에서만 전체 fitting을 수행하므로
+\begin{equation}
+  C_{\mathrm{ours}} = C_{\mathrm{full}}
+  + \sum_{t=1}^{T-1}\Bigl(C^t_{\mathrm{CV}} + C^t_{\mathrm{project}}
+  + C^t_{\mathrm{orient}} + C^t_{\mathrm{res}}\Bigr)
+  \label{eq:cost-ours}
+\end{equation}
+이다. 본 방법이 실제로 빠르려면
+\begin{equation}
+  C^t_{\mathrm{CV}} + C^t_{\mathrm{project}} + C^t_{\mathrm{orient}}
+  + C^t_{\mathrm{res}} \;<\; C_{\mathrm{full}}
+  \label{eq:cost-hypothesis}
+\end{equation}
+이어야 한다.
+
+\caveat{%
+식 \eqref{eq:cost-hypothesis}은 \textbf{검증할 가설이며 미리 참이라고 가정하는
+결론이 아니다}. 네 항 각각을 별도로 측정하여 항별로 확인한다. 구현은 이 네 항을
+독립된 타이머 스테이지로 계측한다.}
+
+\section{간격 인지 3D Chan--Vese}
+\label{sec:spacing-aware}
+
+\subsection{에너지 범함수}
+
+영상 분할의 변분적 토대는 Mumford--Shah 범함수~\citep{mumford1989_optimal}이다.
+근사 함수 $u$가 경계 $C=\surft$로 나뉜 두 영역에서 각각 상수라고 제한하는
+조각마다 상수 축약을 적용하면 매끄러움 항이 소멸하고 자료 충실도 항과 경계 측도
+항만 남는다. 지시 함수를 $\Heps(\levt)$와 $1-\Heps(\levt)$로, 경계 측도를
+$\deps(\levt)\norm{\gradh\levt}$의 적분으로 대체하면 다음을 얻는다.
+
+\begin{definition}[Chan--Vese 에너지, 간격 인지 형태]
+\label{def:cv-energy}
+가중치 $\mu, \lin, \lout > 0$와 프레임 $t$의 level-set 함수 $\levt$, 영역 평균
+$\cin, \cout$에 대하여
+\begin{align}
+  \ECV(\levt, \cin, \cout)
+  &= \mu \int_\dom \deps(\levt)\,\norm{\gradh\levt}_2 \,dx \notag\\
+  &\quad + \lin \int_\dom \abs{\imgt - \cin}^2\,\Heps(\levt)\,dx \notag\\
+  &\quad + \lout \int_\dom \abs{\imgt - \cout}^2\,\bigl(1 - \Heps(\levt)\bigr)\,dx.
+  \label{eq:cv-energy}
+\end{align}
+\end{definition}
+
+첫째 항은 길이/면적 정규화이다. $\deps(\levt)\norm{\gradh\levt}$는 영도집합
+$\surft$ 위의 근사 면적 측도이므로, 이 항은 표면 면적을 벌점으로 부과하여 매끄러운
+경계를 유도한다. 둘째와 셋째 항은 각각 내부와 외부의 자료 충실도이다.
+
+분할 문제는 $\min_{\levt,\cin,\cout}\ECV$로 정식화되며, 세 변수에 대한 결합 최소화를
+교대 최소화로 접근한다.
+
+\subsection{최적 영역 평균}
+
+\begin{proposition}[최적 영역 평균]
+\label{prop:region-means}
+$\levt$를 고정하면 $\ECV$를 최소화하는 영역 평균은
+\begin{align}
+  \cin  &= \frac{\displaystyle\int_\dom \imgt\,\Heps(\levt)\,dx}
+                {\displaystyle\int_\dom \Heps(\levt)\,dx},
+  \label{eq:cin}\\[0.4em]
+  \cout &= \frac{\displaystyle\int_\dom \imgt\,\bigl(1-\Heps(\levt)\bigr)\,dx}
+                {\displaystyle\int_\dom \bigl(1-\Heps(\levt)\bigr)\,dx}
+  \label{eq:cout}
+\end{align}
+이다.
+\end{proposition}
+
+\begin{proof}
+$\cin$은 식 \eqref{eq:cv-energy}의 둘째 항에만 나타나므로
+\[
+  \frac{\partial \ECV}{\partial \cin}
+  = \lin \int_\dom -2\,(\imgt - \cin)\,\Heps(\levt)\,dx = 0.
+\]
+$\lin>0$이므로 $\int \imgt \Heps(\levt)\,dx = \cin \int \Heps(\levt)\,dx$이고,
+명제 \ref{prop:heaviside}(i)에 의해 $\Heps>0$이므로 $\int \Heps(\levt)\,dx>0$이다.
+따라서 나누어 식 \eqref{eq:cin}을 얻는다. 둘째 미분은
+$\partial^2 \ECV/\partial(\cin)^2 = 2\lin\int \Heps(\levt)\,dx > 0$이므로 최소점이다.
+$\cout$도 같은 논법으로 얻는다.
+\end{proof}
+
+식 \eqref{eq:cin}, \eqref{eq:cout}은 $\levt$가 고정된 상태의 닫힌 형태 해이므로 교대
+최소화의 각 단계에서 즉시 계산된다. $\Heps$가 급격한 이진 지시 함수가 아니므로
+경계 근방의 복셀도 부분적으로 두 평균에 기여한다.
+
+\subsection{Euler--Lagrange 방정식과 경사 흐름}
+
+\begin{theorem}[Chan--Vese Euler--Lagrange 방정식과 경사 흐름]
+\label{thm:gradient-flow}
+$\cin, \cout$을 고정하고 $\levt \in C^2(\dom)$에서 $\ECV$의 최소화를 고려하자.
+$\ECV$의 정류점은 다음 Euler--Lagrange 조건을 만족한다.
+\begin{equation}
+  \deps(\levt)\left[
+    \mu\,\divh\!\left(\frac{\gradh\levt}{\norm{\gradh\levt}}\right)
+    - \lin (\imgt - \cin)^2 + \lout (\imgt - \cout)^2
+  \right] = 0
+  \quad \text{in } \dom,
+  \label{eq:euler-lagrange}
+\end{equation}
+자연/Neumann 경계 조건
+\begin{equation}
+  \frac{\deps(\levt)}{\norm{\gradh\levt}}\,\frac{\partial \levt}{\partial \nrm} = 0
+  \quad \text{on } \partial\dom
+  \label{eq:neumann}
+\end{equation}
+와 함께 성립한다. 이에 대응하며, 경사가 작은 곳의 수치 안정성을 위해 분모를
+정규화한 경사 하강 흐름은 인위적 시간 $s$에 대하여
+\begin{equation}
+  \frac{\partial \levt}{\partial s}
+  = \deps(\levt)\left[
+    \mu\,\divh\!\left(\frac{\gradh\levt}{\norm{\gradh\levt}+\varepsilon}\right)
+    - \lin (\imgt - \cin)^2 + \lout (\imgt - \cout)^2
+  \right]
+  \label{eq:gradient-flow}
+\end{equation}
+이다.
+\end{theorem}
+
+\begin{proof}
+$\levt$의 임의의 매끄러운 섭동 $\psi \in C^\infty_c(\dom)$ 방향으로의 일차 변분을
+계산한다. $E(\tau) := \ECV(\levt + \tau\psi, \cin, \cout)$로 두고
+$\frac{d}{d\tau}E(\tau)\big|_{\tau=0}$을 세 항별로 계산한다. 이하 $\lev := \levt$로
+줄여 쓰고, 연속 수준의 연산자를 $\nabla,\operatorname{div}$로 표기한다.
+
+\textbf{(1) 길이 항.} $L(\lev) = \mu\int_\dom \deps(\lev)\norm{\nabla\lev}\,dx$에 대하여
+$\frac{d}{d\tau}\deps(\lev+\tau\psi)\big|_0 = \deps'(\lev)\psi$이고
+$\frac{d}{d\tau}\norm{\nabla(\lev+\tau\psi)}\big|_0 = \frac{\nabla\lev\cdot\nabla\psi}{\norm{\nabla\lev}}$
+이므로
+\begin{equation}
+  \frac{dL}{d\tau}\bigg|_0
+  = \mu \int_\dom \left[
+    \deps'(\lev)\,\psi\,\norm{\nabla\lev}
+    + \deps(\lev)\frac{\nabla\lev\cdot\nabla\psi}{\norm{\nabla\lev}}
+  \right] dx.
+  \label{eq:proof-length}
+\end{equation}
+둘째 피적분항에 벡터장 $V = \deps(\lev)\frac{\nabla\lev}{\norm{\nabla\lev}}$에 대한
+발산 정리를 적용한다. $\operatorname{div}(\psi V) = \nabla\psi\cdot V + \psi\operatorname{div}V$이므로
+\[
+  \int_\dom \nabla\psi \cdot V\,dx
+  = \int_{\partial\dom} \psi\,V\cdot \nrm\,dS - \int_\dom \psi\,\operatorname{div}V\,dx.
+\]
+곱셈 규칙과 $\nabla\lev\cdot\nabla\lev = \norm{\nabla\lev}^2$을 사용하면
+\[
+  \operatorname{div}V
+  = \deps'(\lev)\,\norm{\nabla\lev}
+  + \deps(\lev)\operatorname{div}\!\left(\frac{\nabla\lev}{\norm{\nabla\lev}}\right).
+\]
+이를 식 \eqref{eq:proof-length}에 대입하면 첫째 항의
+$\deps'(\lev)\psi\norm{\nabla\lev}$와 $\operatorname{div}V$의 동일한 성분이 \emph{정확히
+상쇄}되어
+\begin{equation}
+  \frac{dL}{d\tau}\bigg|_0
+  = -\mu\int_\dom \psi\,\deps(\lev)\operatorname{div}\!\left(\frac{\nabla\lev}{\norm{\nabla\lev}}\right) dx
+  + \mu\int_{\partial\dom} \psi\,\frac{\deps(\lev)}{\norm{\nabla\lev}}
+    \frac{\partial\lev}{\partial\nrm}\,dS
+  \label{eq:proof-length-final}
+\end{equation}
+를 얻는다.
+
+\textbf{(2) 내부 충실도 항.}
+$F_{\mathrm{in}}(\lev) = \lin\int_\dom \abs{\imgt-\cin}^2 \Heps(\lev)\,dx$에서 $\cin$은
+고정이므로 $\Heps$만 미분되고, $\Heps' = \deps$이므로
+\begin{equation}
+  \frac{dF_{\mathrm{in}}}{d\tau}\bigg|_0
+  = \lin \int_\dom \abs{\imgt-\cin}^2 \deps(\lev)\,\psi\,dx.
+\end{equation}
+
+\textbf{(3) 외부 충실도 항.}
+$\frac{d}{d\tau}\bigl(1-\Heps(\lev+\tau\psi)\bigr)\big|_0 = -\deps(\lev)\psi$이므로
+\begin{equation}
+  \frac{dF_{\mathrm{out}}}{d\tau}\bigg|_0
+  = -\lout \int_\dom \abs{\imgt-\cout}^2 \deps(\lev)\,\psi\,dx.
+\end{equation}
+
+\textbf{(4) 결합.} 세 항을 더하면 전체 변분은
+\[
+  \frac{dE}{d\tau}\bigg|_0
+  = \int_\dom \psi\,\deps(\lev)\left[
+    -\mu\operatorname{div}\!\left(\frac{\nabla\lev}{\norm{\nabla\lev}}\right)
+    + \lin(\imgt-\cin)^2 - \lout(\imgt-\cout)^2
+  \right] dx + (\text{경계항})
+\]
+이다. $\lev$가 정류점이면 모든 시험함수 $\psi$에 대해 이 값이 영이어야 하므로,
+변분법의 기본 보조정리에 의해 대괄호에 $\deps(\lev)$를 곱한 것이 $\dom$ 내부에서
+영이어야 한다. 부호를 정리하면 식 \eqref{eq:euler-lagrange}이다. 경계항
+\eqref{eq:proof-length-final}이 모든 $\psi$에 대해 소멸하려면 식 \eqref{eq:neumann}이
+성립해야 한다.
+
+\textbf{(5) 경사 흐름.} $L^2(\dom)$ 내적에 대한 $\ECV$의 경사는 위 변분의 피적분
+계수이다. 경사 하강은 $\partial_s\lev = -\delta \ECV/\delta\lev$로 정의되므로 부호를
+정리하여 식 \eqref{eq:gradient-flow}을 얻는다. 연속 연산자를 간격 인지 연산자로
+대체하고, 경사가 작은 곳에서 정규화된 곡률 항의 분모가 영이 되어 폭주하는 것을 막기
+위해 $\norm{\gradh\lev}$를 $\norm{\gradh\lev}+\varepsilon$으로 정규화하였다.
+\end{proof}
+
+\begin{remark}[부호의 해석]
+식 \eqref{eq:sign}의 규약에서 어떤 복셀이 내부($\lev>0$)에 있으면서 그 밝기가
+$\cin$보다 $\cout$에 더 가까우면 대괄호가 음수가 되어 $\lev$가 감소하고, 그 복셀은
+내부에서 빠져나간다. 이것이 의도한 방향이다. 부호를 하나만 뒤집으면 표면이
+발산한다.
+\end{remark}
+
+\begin{remark}[$\divh,\gradh$로의 대체의 지위]
+식 \eqref{eq:gradient-flow}에서 연속 연산자를 간격 인지 연산자로 대체한 것은 비등방
+계량에서 성립하는 정확한 연속 항등식이 아니라, 연속 $L^2$ 경사 흐름의 \emph{간격
+인지 이산화} 대응물로 이해해야 한다. 이 이산화를 다음 절에서 구체적으로 구성한다.
+\end{remark}
+
+\subsection{간격 인지 이산화: 첫 번째 기여}
+\label{sec:discretization}
+
+자기공명영상은 복셀 간격이 축마다 다른 비등방 격자에서 표본화되며, 슬라이스 간격
+$h_z$가 평면 내 화소 간격 $h_x \approx h_y$보다 크다. 표준 유한차분이 이 간격을
+무시하면 경사와 발산이 축 방향으로 왜곡되어 곡률 기반 정규화 항이 편향된다.
+
+격자점 $(i,j,k)$에서의 이산 level-set 값을 $\lev_{i,j,k}$라 하고, 전진 차분을
+\begin{equation}
+  D^+_x \lev_{i,j,k} = \frac{\lev_{i+1,j,k}-\lev_{i,j,k}}{h_x},\quad
+  D^+_y \lev_{i,j,k} = \frac{\lev_{i,j+1,k}-\lev_{i,j,k}}{h_y},\quad
+  D^+_z \lev_{i,j,k} = \frac{\lev_{i,j,k+1}-\lev_{i,j,k}}{h_z},
+  \label{eq:forward-diff}
+\end{equation}
+후진 차분을
+\begin{equation}
+  D^-_x \lev_{i,j,k} = \frac{\lev_{i,j,k}-\lev_{i-1,j,k}}{h_x},\quad
+  D^-_y \lev_{i,j,k} = \frac{\lev_{i,j,k}-\lev_{i,j-1,k}}{h_y},\quad
+  D^-_z \lev_{i,j,k} = \frac{\lev_{i,j,k}-\lev_{i,j,k-1}}{h_z}
+  \label{eq:backward-diff}
+\end{equation}
+로 정의한다. 각 차분이 $1/h_x, 1/h_y, 1/h_z$로 조정된 점이 핵심이다. 간격 인지
+경사는 중심 차분을 사용하여
+\begin{equation}
+  \gradh\lev_{i,j,k} =
+  \left(
+    \frac{\lev_{i+1,j,k}-\lev_{i-1,j,k}}{2h_x},\
+    \frac{\lev_{i,j+1,k}-\lev_{i,j-1,k}}{2h_y},\
+    \frac{\lev_{i,j,k+1}-\lev_{i,j,k-1}}{2h_z}
+  \right),
+  \label{eq:central-grad}
+\end{equation}
+간격 인지 발산은 벡터장 $V=(V_x,V_y,V_z)$에 대해 후진 차분을 사용하여
+\begin{equation}
+  \divh V_{i,j,k} =
+  \frac{V_{x,i,j,k}-V_{x,i-1,j,k}}{h_x}
+  + \frac{V_{y,i,j,k}-V_{y,i,j-1,k}}{h_y}
+  + \frac{V_{z,i,j,k}-V_{z,i,j,k-1}}{h_z}
+  \label{eq:backward-div}
+\end{equation}
+로 정의한다. 곡률 항은 $\kappa_h = \divh\bigl(\gradh\lev/\norm{\gradh\lev}\bigr)$로
+이산화된다.
+
+\paragraph{차분 조합의 근거.}
+곡률 항에서 정규화된 경사장은 \emph{전진} 차분으로 만들고 발산은 \emph{후진} 차분으로
+취한다. 이 짝은 임의의 선택이 아니다. 이산 부분적분 항등식에서 경계항을 제외한
+부분이 연속 경우 식 \eqref{eq:proof-length-final}의 부호 구조를 보존하도록 한다.
+반면 법선(식 \eqref{eq:normal-curvature})과 정사영(제 \ref{sec:projection}절)에는
+중심 차분 \eqref{eq:central-grad}을 사용한다. 그 절단 오차가 $O(\hmax^2)$이며, 이것이
+명제 \ref{prop:normal-error}에서 법선 각오차를 지배하는 항이다.
+
+\begin{remark}[비등방성의 반영]
+간격을 무시한 이산화는 사실상 $h_x=h_y=h_z=1$로 두는 것에 해당한다. cine CMR에서
+$h_z > h_x \approx h_y$이므로 간격을 무시하면 $z$ 방향 차분이 실제보다 과대평가되어
+표면 곡률과 정규화가 슬라이스 방향으로 왜곡된다. 식 \eqref{eq:central-grad},
+\eqref{eq:backward-div}의 스케일링이 이 왜곡을 제거한다.
+\end{remark}
+
+\caveat{%
+이 기여가 실제로 효과가 있는지는 \emph{측정해야 한다}. 구현은 모든 연산자에
+\texttt{spacing\_aware} 스위치를 두어 간격을 무시한 버전을 함께 제공하며, 제
+\ref{sec:ablation-design}절의 ablation은 등방 격자와 $h_z/h_x \approx 6.4$인 격자에서
+두 버전의 Dice를 비교한다. 격차가 비등방성과 함께 커지지 않는다면 이 기여는 이론이
+주장하는 일을 하지 않는 것이다.}
+
+\subsection{이산 갱신식}
+
+간격 인지 연산자를 식 \eqref{eq:gradient-flow}에 대입하고 인위적 시간을 $\Delta s$의
+명시적 Euler 전진으로 이산화하면 반복 지수 $n$에 대한 갱신식
+\begin{equation}
+  \lev^{n+1}_{i,j,k} = \lev^{n}_{i,j,k}
+  + \Delta s\,\deps\bigl(\lev^n_{i,j,k}\bigr)\left[
+    \mu\,\divh\!\left(\frac{\gradh\lev^n}{\norm{\gradh\lev^n}+\varepsilon}\right)_{i,j,k}
+    - \lin(\imgt{}_{,i,j,k}-\cin)^2 + \lout(\imgt{}_{,i,j,k}-\cout)^2
+  \right]
+  \label{eq:euler-update}
+\end{equation}
+을 얻는다. 각 반복에서 식 \eqref{eq:cin}, \eqref{eq:cout}으로 영역 평균을 갱신하고
+식 \eqref{eq:euler-update}로 $\levt$를 갱신하는 교대 절차를 수렴할 때까지 반복한다.
+
+\paragraph{보폭의 선택.}
+식 \eqref{eq:euler-update}은 명시적 기법이므로 보폭을 고정하지 않고
+\begin{equation}
+  \Delta s = \mathrm{cfl}\cdot \frac{\min(\spacing)}{\max_{i,j,k}\abs{\partial_s \lev}}
+  \label{eq:cfl}
+\end{equation}
+로 적응적으로 선택한다. 이는 한 반복에서 계면이 $\mathrm{cfl}\cdot\min(\spacing)$보다
+많이 움직이지 않게 한다. 고정 보폭은 보조정리 \ref{lem:linear-conv}의 조건
+$\alpha \le 1/L$을 조용히 위반할 수 있어 측정된 반복 횟수를 무의미하게 만든다.
+
+\section{웜스타트: 두 번째 기여}
+\label{sec:warmstart}
+
+\subsection{설정}
+
+각 프레임 $t$에 대하여 에너지 $E_t(\lev) := \ECV(\lev,\cin,\cout)$을 최소화하는 정상
+상태 해를 $\lev^*_t$라 하자. 웜스타트 초기화란 프레임 $t$의 경사 하강을 시작할 때
+초기값으로 이전 프레임의 수렴 해를 사용하는 것이다. 본 논문의 웜스타트는 이전 해
+전체가 아니라 \emph{좁은 띠}로 제한된 초기값
+\begin{equation}
+  \lev^{(0)}_t = \lev^*_{t-1}
+  \quad \text{on } \bigl\{\, x \in \dom : \abs{\lev^*_{t-1}(x)} < b \,\bigr\}
+  \label{eq:warmstart-init}
+\end{equation}
+을 사용한다. $b>0$은 띠의 폭이며, 띠 밖에서는 부호만 보존하는 상수 외삽을 둔다.
+이와 대비되는 콜드스타트는 프레임과 무관한 고정 초기값 $\lev_{\mathrm{cold}}$를
+사용한다.
+
+\begin{assumption}[작은 변화 가정]
+\label{ass:small-change}
+인접 프레임의 수렴 해가 서로 가까워, 어떤 작은 $\eta>0$에 대하여
+\begin{equation}
+  \norm{\lev^*_{t-1} - \lev^*_t}_{L^2(\dom)} \le \eta
+  \label{eq:small-change}
+\end{equation}
+가 성립한다. 또한 $\lev^*_{t-1}$이 $\lev^*_t$ 주위의 국소 수렴 영역 안에 놓이며,
+좁은 띠 제한 \eqref{eq:warmstart-init}이 이 근접성을 훼손하지 않는다고 가정한다.
+\end{assumption}
+
+식 \eqref{eq:small-change}의 좌변은 웜스타트의 초기 오차
+$e^{\mathrm{warm}}_0 \le \eta$이다. 콜드스타트의 초기 오차
+$e^{\mathrm{cold}}_0 = \norm{\lev_{\mathrm{cold}}-\lev^*_t}$은 일반적으로 이보다
+훨씬 크다. 좁은 띠 초기화는 표면 근방에만 계산을 집중시켜 프레임당 비용을 줄이는
+장치이며, 표면 근방에서 $\lev^*_{t-1}$과 $\lev^*_t$가 일치하므로 초기 오차의 크기를
+바꾸지 않는다.
+
+\subsection{도입하는 알려진 결과}
+
+정리 \ref{thm:warmstart}은 새로운 수렴 정리를 처음부터 증명하는 것이 아니라, 경사
+흐름과 경사 하강에 대한 알려진 결과를 웜스타트 설정에 적용한다. 어느 부분이 인용된
+기지 결과이고 어느 부분이 본 논문의 특수화인지 명시한다.
+
+\begin{lemma}[경사 흐름의 에너지 소산; 기지 결과]
+\label{lem:dissipation}
+$\lev(s)$가 경사 흐름 $\partial_s\lev = -\delta E_t/\delta\lev$의 매끄러운 해이면
+\begin{equation}
+  \frac{d}{ds}E_t(\lev(s))
+  = -\norm{\frac{\delta E_t}{\delta \lev}(\lev(s))}^2 \le 0
+  \label{eq:dissipation}
+\end{equation}
+이 성립하고, 등호는 정류점에서만 성립한다.
+\end{lemma}
+
+\begin{proof}
+연쇄 법칙과 $L^2$ 내적을 사용하면
+\[
+  \frac{d}{ds}E_t(\lev(s))
+  = \inner{\frac{\delta E_t}{\delta\lev}}{\partial_s \lev}
+  = \inner{\frac{\delta E_t}{\delta\lev}}{-\frac{\delta E_t}{\delta\lev}}
+  = -\norm{\frac{\delta E_t}{\delta\lev}}^2 \le 0.
+\]
+값이 영이 되는 것은 $\delta E_t/\delta\lev = 0$, 즉 정류점일 때뿐이다.
+\end{proof}
+
+\begin{assumption}[국소 Polyak--{\L}ojasiewicz 및 평활성]
+\label{ass:pl}
+조건 (i)은 Polyak~\citep{polyak1963_gradient}이 도입하고 Karimi
+등~\citep{karimi2016_linear}이 경사 및 근접 경사법의 선형 수렴 조건으로 정리한
+것이다.
+해 $\lev^*_t$의 반지름 $r>0$ 근방
+$\mathcal{B}_r = \{\lev : \norm{\lev-\lev^*_t}\le r\}$에서 다음을 가정한다.
+\begin{enumerate}[label=(\roman*)]
+  \item (국소 PL 조건) 어떤 상수 $m>0$에 대하여 모든 $\lev\in\mathcal{B}_r$에서
+  \begin{equation}
+    \tfrac{1}{2}\norm{\frac{\delta E_t}{\delta\lev}(\lev)}^2
+    \ge m\bigl(E_t(\lev)-E_t(\lev^*_t)\bigr).
+    \label{eq:pl}
+  \end{equation}
+  \item (국소 $L$-평활성) 어떤 상수 $L>0$에 대하여 $\delta E_t/\delta\lev$가
+  $\mathcal{B}_r$에서 Lipschitz 상수 $L$로 Lipschitz 연속이다.
+\end{enumerate}
+\end{assumption}
+
+\caveat{%
+Chan--Vese 에너지 \eqref{eq:cv-energy}는 $\lev$에 대해 \textbf{전역적으로 볼록하지
+않다}. 비선형 곡률 항과 매끄러운 Heaviside의 비볼록성 때문이다. 따라서 전역 강볼록성을
+주장할 수 없다. 그러나 고립된 국소 최소점의 충분히 작은 근방에서는, $E_t$가 $C^2$이고
+그곳의 이차 형식이 양의 정부호라는 일반적 조건 아래 가정 \ref{ass:pl}이 성립한다.
+본 논문은 이 국소 조건을 가정으로 도입하며 그것이 성립하는 근방으로 논의를 제한한다.
+가정 \ref{ass:small-change}은 바로 웜스타트 초기값이 이 근방에 들어옴을 보장하는
+역할을 한다($\eta \le r$).}
+
+\begin{lemma}[국소 선형 수렴; 기지 결과의 적용]
+\label{lem:linear-conv}
+가정 \ref{ass:pl}이 성립하고 경사 하강 반복
+$\lev^{(k+1)} = \lev^{(k)} - \alpha\,\delta E_t/\delta\lev(\lev^{(k)})$를 고정 보폭
+$0<\alpha\le 1/L$로 수행하며 반복열이 $\mathcal{B}_r$을 벗어나지 않는다고 하자.
+그러면 에너지 잉여 $\Delta_k := E_t(\lev^{(k)})-E_t(\lev^*_t)$에 대하여
+\begin{equation}
+  \Delta_k \le \rho^k \Delta_0, \qquad \rho := 1-\alpha m \in (0,1)
+  \label{eq:linear-conv}
+\end{equation}
+가 성립한다.
+\end{lemma}
+
+\begin{proof}
+$L$-평활성으로부터 표준 하강 보조정리~\citep[Lemma 1.2.3]{nesterov2004_introductory}에
+의해
+\[
+  E_t(\lev^{(k+1)}) \le E_t(\lev^{(k)})
+  - \alpha\left(1-\tfrac{\alpha L}{2}\right)\norm{\frac{\delta E_t}{\delta\lev}(\lev^{(k)})}^2
+  \le E_t(\lev^{(k)}) - \tfrac{\alpha}{2}\norm{\frac{\delta E_t}{\delta\lev}(\lev^{(k)})}^2,
+\]
+마지막 부등식은 $\alpha\le 1/L$이면 $1-\alpha L/2 \ge 1/2$임을 사용한다. 여기에 PL
+조건 \eqref{eq:pl}을 대입하면
+$\Delta_{k+1} \le \Delta_k - \alpha m \Delta_k = (1-\alpha m)\Delta_k$이고,
+$0<\alpha m<1$이므로 귀납으로 식 \eqref{eq:linear-conv}을 얻는다.
+\end{proof}
+
+\subsection{웜스타트 수렴 정리}
+
+\begin{theorem}[웜스타트 수렴과 반복 횟수 절감]
+\label{thm:warmstart}
+가정 \ref{ass:small-change}와 \ref{ass:pl}이 $\lev^*_t$의 근방 $\mathcal{B}_r$에서
+성립한다고 하자. 경사 하강을 보폭 $0<\alpha\le 1/L$로 수행하고, 목표 허용 오차
+$\mathrm{tol}>0$에 대해 에너지 잉여가 $\Delta_K \le \mathrm{tol}$이 되는 최소 반복
+횟수를 $K(e_0)$라 하자. 여기서 $e_0 = \norm{\lev^{(0)}-\lev^*_t}$이다. 그러면 다음이
+성립한다.
+\begin{enumerate}[label=(\roman*)]
+  \item (수렴 보존) 초기값이 $\mathcal{B}_r$ 안에 있으면 경사 하강은 $\lev^*_t$로
+  선형 속도로 수렴하며, 에너지는 식 \eqref{eq:dissipation}에 의해 단조 감소한다.
+  \item (정량적 반복 횟수 한계) 초기 에너지 잉여를 $L$-평활성으로 위로 어림하면
+  $\Delta_0 \le \tfrac{L}{2}e_0^2$이고, 식 \eqref{eq:linear-conv}로부터
+  \begin{equation}
+    K(e_0) = \left\lceil \frac{\log(\Delta_0/\mathrm{tol})}{\log(1/\rho)} \right\rceil
+    \le \left\lceil \frac{\log\bigl(L e_0^2/(2\,\mathrm{tol})\bigr)}{\log(1/\rho)} \right\rceil,
+    \qquad \rho = 1-\alpha m.
+    \label{eq:iteration-bound}
+  \end{equation}
+  \item (웜스타트의 이득) $e^{\mathrm{warm}}_0 \le \eta < e^{\mathrm{cold}}_0$이면
+  식 \eqref{eq:iteration-bound}의 상계가 $e_0$의 단조증가 함수이므로
+  \begin{equation}
+    K(e^{\mathrm{warm}}_0) \le K(e^{\mathrm{cold}}_0).
+    \label{eq:warmstart-gain}
+  \end{equation}
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+\textbf{(i)} 가정 \ref{ass:small-change}에서 $\eta \le r$이면 웜스타트 초기값
+$\lev^{(0)}=\lev^*_{t-1}$은 $\mathcal{B}_r$ 안에 있다. 보조정리
+\ref{lem:linear-conv}에 의해 에너지 잉여가 $\rho^k$로 감소하므로 $\Delta_k\to0$이고,
+PL 조건에서 $E_t(\lev)-E_t(\lev^*_t)\ge0$이 최소점에서만 영이 되므로
+$\lev^{(k)}\to\lev^*_t$이다.
+
+\textbf{(ii)} $\delta E_t/\delta\lev(\lev^*_t)=0$이고 $\delta E_t/\delta\lev$가
+$\mathcal{B}_r$에서 $L$-Lipschitz이므로 표준 이차 상계
+\[
+  E_t(\lev)-E_t(\lev^*_t)
+  \le \inner{\frac{\delta E_t}{\delta\lev}(\lev^*_t)}{\lev-\lev^*_t}
+  + \frac{L}{2}\norm{\lev-\lev^*_t}^2
+  = \frac{L}{2}\norm{\lev-\lev^*_t}^2
+\]
+에서 $\lev=\lev^{(0)}$로 두면 $\Delta_0 \le \tfrac{L}{2}e_0^2$을 얻는다. 다음으로
+$\Delta_K \le \rho^K\Delta_0 \le \mathrm{tol}$이 되기 위한 충분조건에 로그를 취하고
+$\log\rho<0$임에 유의하여 정리하면
+$K \ge \log(\Delta_0/\mathrm{tol})/\log(1/\rho)$이고, 이를 넘는 최소 정수가
+식 \eqref{eq:iteration-bound}이다.
+
+\textbf{(iii)} 식 \eqref{eq:iteration-bound}의 우변은 로그 안이 $e_0^2$에 비례하므로
+$e_0$의 단조증가 함수이다. 따라서 결론이 따라온다.
+
+(i)과 (ii)는 최적화 이론의 기지 결과(보조정리 \ref{lem:dissipation},
+\ref{lem:linear-conv})를 인용하여 얻었고, 초기 오차를 인접 프레임 해의 근접성
+\eqref{eq:small-change}과 연결하여 반복 횟수 절감 \eqref{eq:warmstart-gain}으로
+특수화한 부분이 본 논문의 기여이다.
+\end{proof}
+
+\begin{remark}[선형 수렴 대 수축]
+식 \eqref{eq:iteration-bound}은 에너지 잉여가 비율 $\rho$로 감소하는 선형 수렴에 대한
+한계이다. 반복열 자체가 상수 $\rho'\in(0,1)$로 수축하는 경우에도 같은 로그 논법으로
+$K(e_0)\le\lceil \log(e_0/\mathrm{tol})/\log(1/\rho')\rceil$을 얻으며 결론
+\eqref{eq:warmstart-gain}은 동일하게 성립한다. 어느 관점에서도 더 작은 초기 오차가
+더 적은 반복을 낳는다는 정성적 결론은 변하지 않는다.
+\end{remark}
+
+\caveat{%
+정리 \ref{thm:warmstart}은 \emph{순서}를 예측하며 절대 반복 횟수를 예측하지 않는다.
+또한 구현에서 웜스타트를 끄면 좁은 띠 crop도 함께 꺼지므로(띠가 웜스타트로부터
+정의되므로), 벽시계 시간의 격차는 두 효과가 섞인다. 반복 횟수의 격차는 초기화만을
+분리한다. RQ1은 두 값을 별도로 보고한다.}
+
+\section{정준 2D Gaussian surfel}
+\label{sec:canonical}
+
+\subsection{기하}
+
+프레임 $t$에서 surfel anchor $\anchor^t_i$가 정사영으로 $\surft$ 위에 놓인 상태라
+하자. 그 점에서의 단위 법선은 간격 인지 경사로부터
+\begin{equation}
+  \nrm^t_i = \frac{\gradh\levt(\anchor^t_i)}{\norm{\gradh\levt(\anchor^t_i)}+\varepsilon}
+  \label{eq:unit-normal}
+\end{equation}
+로 정의한다. 접평면 프레임 행렬은 두 접선축을 열로 하여
+\begin{equation}
+  \framemat^t_i = \bigl[\,e^t_{i,1}\;\; e^t_{i,2}\,\bigr] \in \Real^{3\times2},
+  \qquad (\framemat^t_i)\transp \framemat^t_i = I_2,
+  \qquad (\framemat^t_i)\transp \nrm^t_i = 0
+  \label{eq:frame}
+\end{equation}
+을 만족하도록 구성한다. scale 행렬은
+$\scalemat_i = \operatorname{diag}(s_{i,1},s_{i,2}) \in \Real^{2\times2}$이고, 국소
+좌표 $u\in\Real^2$에 대응하는 표면 위의 점과 Gaussian 가중치는
+\begin{equation}
+  X^t_i(u) = \anchor^t_i + \framemat^t_i \scalemat_i u,
+  \qquad
+  G_i(u) = \exp\!\left(-\tfrac{1}{2}u\transp u\right)
+  \label{eq:surfel-point}
+\end{equation}
+로 주어진다. 정의에 의해 $\{\nrm^t_i, e^t_{i,1}, e^t_{i,2}\}$은 $\anchor^t_i$에서의
+오른손 정규직교 프레임을 이룬다.
+
+식 \eqref{eq:surfel-point}에는 법선방향 두께나 3차원 공분산이 없다. 따라서
+Chan--Vese의 2차원 곡면과 primitive의 차원이 직접 대응한다.
+
+\subsection{초기 배치와 scale}
+
+anchor는 $\surf_0$의 marching tetrahedra mesh에서 \emph{면적 균일}하게 추출한다.
+면적에 비례하는 확률로 삼각형을 고르고 그 안에서 균일하게 점을 뽑으므로, 표면 위의
+밀도가 고른 표본이 된다. 이후 식 \eqref{eq:projection-iter}의 정사영으로 anchor를
+$\{\lev_0=0\}$ 위로 조인다. 즉 mesh는 \emph{표본 추출기}일 뿐이며 저장 표현의
+일부가 아니다.
+
+면적 $A$를 $N$개 원반이 덮을 때 평균 anchor 간격은 $\approx\sqrt{A/N}$이므로 기본
+반경을
+\begin{equation}
+  s = \gamma\sqrt{A/N}
+  \label{eq:scale-init}
+\end{equation}
+로 둔다. $\gamma$는 hole과 overlap 사이의 절충을 정하는 계수이며, 두 값을 모두
+측정한다.
+
+곡률 적응 확장에서는 명제 \ref{prop:planar-disk}의 평면 원반 오차
+$\tfrac12\kappa s^2$이 예산 이하가 되도록 반경을 추가로 제한한다.
+\begin{equation}
+  s_i \le \sqrt{2\,\mathrm{budget}/\abs{\kappa_i}}.
+  \label{eq:curvature-scale}
+\end{equation}
+이는 오차 분석을 직접적, 정량적으로 사용하는 것이다. 원반은 표면이 휘는 곳에서만
+작아지고 다른 곳에서는 작아지지 않는다.
+
+\section{법선 정사영: 세 번째 기여}
+\label{sec:projection}
+
+\subsection{최소 법선 보정의 유도}
+
+이전 프레임의 anchor $\anchor^{t-1}_i$를 현재 표면 $\surft$로 옮기는 문제를
+생각한다. 형상이 프레임 간에 조금 변하므로 이전 anchor는 일반적으로 $\surft$ 위에
+없고 $\levt(\anchor^{t-1}_i)\ne0$이다.
+
+\begin{theorem}[최소 법선 보정과 반복 투영]
+\label{thm:projection}
+$\levt$가 $\anchor := \anchor^{t-1}_i$ 근방에서 $C^2$이고 $\gradh\levt(\anchor)\ne0$
+이라 하자. $\anchor$에서 표면 $\surft$로 향하는, 경사 방향에 평행한 일차 보정은
+정규화 상수 $\varepsilon\ge0$에 대하여
+\begin{equation}
+  d^t_i = -\frac{\levt(\anchor^{t-1}_i)}
+                {\norm{\gradh\levt(\anchor^{t-1}_i)}^2 + \varepsilon}
+          \,\gradh\levt(\anchor^{t-1}_i)
+  \label{eq:minimal-step}
+\end{equation}
+로 주어진다. 이를 반복하면 Newton 유사 투영 반복
+\begin{equation}
+  \anchor^{t,(k+1)}_i = \anchor^{t,(k)}_i
+  - \frac{\levt\bigl(\anchor^{t,(k)}_i\bigr)}
+         {\norm{\gradh\levt\bigl(\anchor^{t,(k)}_i\bigr)}^2+\varepsilon}
+    \,\gradh\levt\bigl(\anchor^{t,(k)}_i\bigr),
+  \qquad \anchor^{t,(0)}_i = \anchor^{t-1}_i
+  \label{eq:projection-iter}
+\end{equation}
+을 얻으며, 이 반복은 $\surft$ 근방에서 잔차 $\levt(\anchor^{(k)})$를 영으로 국소
+수렴시킨다.
+\end{theorem}
+
+\begin{proof}
+$\levt$를 $\anchor$ 주위에서 일차 Taylor 전개하면 변위 $d$에 대하여
+\begin{equation}
+  \levt(\anchor+d) = \levt(\anchor) + \gradh\levt(\anchor)\transp d + o(\norm{d}).
+  \label{eq:taylor}
+\end{equation}
+표면 위에 놓이는 조건 $\levt(\anchor+d)=0$을 일차항까지 부과하면
+\begin{equation}
+  \levt(\anchor) + \gradh\levt(\anchor)\transp d = 0.
+  \label{eq:linear-constraint}
+\end{equation}
+식 \eqref{eq:linear-constraint}은 $d\in\Real^3$에 대한 \emph{하나의} 스칼라 방정식이므로
+과소 결정된다. 표면의 형상만으로는 접선 방향 이동이 결정되지 않기 때문이다. 따라서
+유일성을 위해 최소 노름 보정을 택한다.
+\begin{equation}
+  d = \argmin\bigl\{\,\norm{d'} \;:\; \gradh\levt(\anchor)\transp d' = -\levt(\anchor) \,\bigr\}.
+  \label{eq:least-norm}
+\end{equation}
+임의의 허용해 $d'$을 경사 성분과 접선 성분으로
+$d' = \beta\,\gradh\levt(\anchor) + w$, $w\transp\gradh\levt(\anchor)=0$로 분해하면
+제약은 $\beta$만으로 결정되고 노름은
+$\norm{d'}^2 = \beta^2\norm{\gradh\levt(\anchor)}^2 + \norm{w}^2$이므로 $\norm{w}$는
+목적함수만 키운다. 따라서 최소해는 $w=0$, 즉 경사 방향에 평행하다.
+$d=\beta\,\gradh\levt(\anchor)$를 식 \eqref{eq:linear-constraint}에 대입하면
+\[
+  \levt(\anchor) + \beta\norm{\gradh\levt(\anchor)}^2 = 0
+  \;\Longrightarrow\;
+  \beta = -\frac{\levt(\anchor)}{\norm{\gradh\levt(\anchor)}^2}.
+\]
+이로써 $\varepsilon=0$인 최소 법선 보정을 얻고, 경사가 작은 곳에서 분모가 영에
+가까워져 보정이 폭주하는 것을 막기 위해 $\varepsilon\ge0$을 더하면 식
+\eqref{eq:minimal-step}이 된다. 이 보정은 식 \eqref{eq:unit-normal}의 법선 방향에
+평행하므로 법선 정사영이다.
+
+반복 투영: 일차 보정은 일차 Taylor 근사에 기반하므로 곡률이 있는 곳에서는 한 번의
+보정으로 정확히 $\surft$에 닿지 않는다. 보정을 반복하면 식
+\eqref{eq:projection-iter}을 얻는다. 잔차의 이차 감소는 보조정리
+\ref{lem:quadratic}에서 정량적으로 보이며, 그로부터 국소 수렴이 따라온다.
+\end{proof}
+
+\begin{proposition}[부호 거리 근방에서의 1--2회 수렴]
+\label{prop:newton-steps}
+$\levt$가 $\surft$ 근방에서 부호 거리 함수에 가까워 $\norm{\gradh\levt}\approx1$이
+성립하면, $\varepsilon$이 무시할 만큼 작을 때 반복 \eqref{eq:projection-iter}의 한
+단계는
+\begin{equation}
+  \anchor^{(k+1)} = \anchor^{(k)} - \levt\bigl(\anchor^{(k)}\bigr)\gradh\levt\bigl(\anchor^{(k)}\bigr)
+  \label{eq:newton-step}
+\end{equation}
+로 축약되며, 이는 스칼라 함수 $\levt$에 대한 표준 Newton 단계와 일치한다. $\levt$가
+국소적으로 거의 아핀이면 잔차는 한 번의 반복으로 거의 영이 되고, 곡률에 의한 이차
+잔차는 다음 한 번의 반복에서 제거된다. 따라서 반복 횟수 $K_p$는 1 또는 2로 충분하다.
+\end{proposition}
+
+\begin{proof}
+부호 거리 근방에서 $\norm{\gradh\levt}^2\approx1$이므로 $\varepsilon\to0$이면 식
+\eqref{eq:projection-iter}의 분모가 1이 되어 식 \eqref{eq:newton-step}이 된다.
+$\levt$가 국소적으로 아핀이면 식 \eqref{eq:taylor}의 $o(\norm{d})$ 항이 소멸하여 식
+\eqref{eq:linear-constraint}이 정확한 방정식이 되고 한 번의 단계로
+$\levt(\anchor^{(1)})=0$이 된다. 아핀이 아닌 경우 남는 잔차는 보조정리
+\ref{lem:quadratic}에 의해 이차이므로 부호 거리 근방에서 매우 작아 추가 한 번의
+반복으로 제거된다.
+\end{proof}
+
+이 성질이 구현에서 $\levt$를 주기적으로 부호 거리 함수로 재초기화하는 이유이다.
+재초기화는 영도집합을 움직이지 않으면서 $\norm{\gradh\levt}\approx1$을 회복시킨다.
+
+\subsection{접선 방향의 미결정성}
+\label{sec:tangential}
+
+식 \eqref{eq:least-norm}의 최소 노름 선택은 \emph{가장 가까운 표면으로 가는 기하학적
+선택}이며 실제 심근세포 하나를 추적하는 방법이 아니다. 표면을 따라 미끄러지는 접선
+운동은 두 표면의 모양만 보고는 결정할 수 없기 때문이다.
+
+\caveat{%
+그러므로 본 연구의 결과는 ``심장 모양의 시간 변화''에는 사용할 수 있으나, 추가 검증
+없이 ``실제 조직의 strain''이라고 해석할 수 없다. vertex correspondence가 필요한
+기능적 계측에는 mesh 운동 추적이 더 적합하다.}
+
+또한 식 \eqref{eq:projection-iter}은 저장된 변형장이 아니라 각 프레임에서 표면이
+제공하는 국소 계산이다. 따라서 위상이 바뀌거나 서로 가까운 두 표면 분기가 존재하면
+잘못된 곳으로 투영될 수 있다. 구현은 최대 이동거리 제한(trust region)과 잔차가
+증가한 anchor의 되돌림을 사용하여 이 실패를 줄이고, 두 사건의 발생 빈도를 보고한다.
+
+\section{접평면 프레임 전송}
+\label{sec:transport}
+
+단위 법선 $\nrm^t_i$는 접평면을 결정하지만 그 평면 안에서의 축의 방향, 즉 면내
+회전까지 고정하지는 못한다. 이 gauge 자유도를 프레임 간 연속적으로 결정하기 위해,
+이전 접선축을 새 접평면으로 정사영한 뒤 정규화하는 최소 회전 전송을 사용한다.
+\begin{align}
+  \bar e^t_{i,1} &= e^{t-1}_{i,1} - \bigl(e^{t-1}_{i,1}\cdot \nrm^t_i\bigr)\nrm^t_i,
+  \label{eq:transport-project}\\
+  e^t_{i,1} &= \frac{\bar e^t_{i,1}}{\norm{\bar e^t_{i,1}}+\varepsilon},
+  \qquad
+  e^t_{i,2} = \nrm^t_i \times e^t_{i,1}.
+  \label{eq:transport-normalize}
+\end{align}
+식 \eqref{eq:transport-project}은 이전 축에서 법선 성분을 제거하여 새 접평면 안에
+놓이도록 하고, 식 \eqref{eq:transport-normalize}은 이를 단위 벡터로 만든 뒤 외적으로
+둘째 축을 정한다. 이렇게 하면 프레임이 필요 이상으로 회전하지 않아 접선축의 시간적
+연속성이 유지된다.
+
+이는 실제 조직의 접선 이동을 추정하는 식이 아니라 rendering orientation을
+연속적으로 정하는 규칙임을 명시한다. 전송의 정확성과 퇴화는 제 \ref{sec:frame-error}절에서
+분석한다.
+
+\paragraph{밀도 변화의 보정.}
+법선 투영이 반복되면 수축 영역에 surfel이 몰리고 팽창 영역에 빈틈이 생길 수 있다.
+이는 표면 잔차 $\Esurf$로는 드러나지 않는다. anchor가 정확히 $\surft$ 위에 있으면서도
+분포가 나쁠 수 있기 때문이다. 따라서 최근접 중심거리 분포를 별도로 측정하고, 필요한
+경우 접평면 안에서만 작용하는 약한 repulsion과 제한된 densification/pruning을 적용한다.
+법선 성분을 제거한 뒤 이동하고 다시 정사영하므로, 이 보정이 표면 정확도를 분포
+품질과 교환하지 않는다.
+
+\section{외형 잔차}
+\label{sec:residual}
+
+표면 이동만으로 MRI 밝기 변화를 모두 설명할 수 없으므로 surfel $i$의 프레임 $t$에서의
+진폭을 기준값과 잔차의 합
+\begin{equation}
+  \amp^t_i = \amp^0_i + \Delta \amp^t_i
+  \label{eq:amplitude-split}
+\end{equation}
+으로 둔다. 중심, 접평면, scale을 고정하면 alpha 가중치가 주어진 2DGS 렌더링은 진폭에
+대해 선형이므로(명제 \ref{prop:linearity}), 관측 pixel vector를 $y_t$, 렌더링 행렬을
+$A_t$라 할 때
+\begin{equation}
+  \Delta \amp^*_t = \argmin_{\Delta \amp_t}
+  \norm{W\bigl(A_t(\amp^0+\Delta \amp_t) - y_t\bigr)}^2_2
+  + \lambda_a \norm{\Delta \amp_t}^2_2
+  + \lambda_T \norm{\Delta \amp_t - \Delta \amp_{t-1}}^2_2
+  \label{eq:residual-ls}
+\end{equation}
+를 푼다. 첫 항은 MRI appearance를 맞추고, 둘째 항은 잔차를 작게 유지하며, 셋째 항은
+프레임 간 밝기 깜빡임을 억제한다.
+
+정칙화는 선택 사항이 아니다. 알려진 slice plane에서 보이지 않는 surfel이 많으므로
+$A_t$는 큰 영공간을 가지며, 자료 항만으로는 그들의 잔차가 결정되지 않는다. Tikhonov
+항이 그것을 0으로 고정한다.
+
+저장량을 더 줄이는 확장에서는
+\begin{equation}
+  \Delta \amp^t_i = \sum_{\ell=1}^{r} U_{i\ell} z_{\ell t},
+  \qquad r \ll \min(N,T)
+  \label{eq:lowrank}
+\end{equation}
+와 같은 저계수 시간 잔차를 사용한다. 그 절단 오차는 명제 \ref{prop:lowrank}에서
+정확히 주어진다.
+
+\section{원근 정합 래스터화}
+\label{sec:raster}
+
+단순히 3차원 Gaussian을 화면에 아핀 투영하지 않고, 각 pixel 광선과 surfel 평면의
+교점을 직접 구한다. 카메라 중심을 $\camc$, pixel $q$ 방향의 \emph{단위} 벡터를
+$\raydir$라 하면 광선은
+\begin{equation}
+  r_q(\depthq) = \camc + \depthq\,\raydir, \qquad \depthq \ge 0
+  \label{eq:ray}
+\end{equation}
+이다. surfel $i$는 $\anchor^t_i$를 지나고 법선 $\nrm^t_i$를 갖는 평면 위에 놓이므로,
+광선이 이 평면과 만나는 깊이와 교점은
+\begin{equation}
+  \depthq^t_i(q) = \frac{(\nrm^t_i)\transp\bigl(\anchor^t_i - \camc\bigr)}
+                        {(\nrm^t_i)\transp \raydir},
+  \qquad
+  x^t_i(q) = \camc + \depthq^t_i(q)\,\raydir
+  \label{eq:ray-plane}
+\end{equation}
+로 계산한다. $\raydir$가 단위이므로 $\depthq$는 mm 단위 거리이며 복셀 간격과 직접
+비교 가능하다. 교점의 2차원 국소 좌표는
+\begin{equation}
+  u^t_i(q) = \scalemat_i^{-1}(\framemat^t_i)\transp\bigl(x^t_i(q) - \anchor^t_i\bigr),
+  \label{eq:local-coord}
+\end{equation}
+화면 pixel에서의 불투명도는
+\begin{equation}
+  \alphaq^t_i(q) = \opa^t_i \exp\!\left(-\tfrac{1}{2}\norm{u^t_i(q)}^2_2\right)
+  \label{eq:alpha}
+\end{equation}
+이다. $(\nrm^t_i)\transp\raydir$가 0에 가까운 스침각 surfel과 카메라 뒤의 교점
+($\depthq \le 0$)은 제거한다. 남은 surfel을 $\depthq^t_i(q)$ 순서로 alpha
+composition하면
+\begin{equation}
+  \Chat_t(q) = \sum_i \left(\prod_{j<i}\bigl(1-\alphaq^t_j(q)\bigr)\right)
+               \alphaq^t_i(q)\,c^t_i
+  \label{eq:compositing}
+\end{equation}
+를 얻는다. $c^t_i$는 진폭 $\amp^t_i$를 grayscale 또는 의료영상 window/level colormap으로
+변환한 값이다.
+
+\subsection{정준 프레임 fitting의 손실}
+
+첫 프레임의 2DGS fitting에는 세 종류의 제약을 추가한다. 투영된 Chan--Vese mask와
+rendered alpha mask 사이의 $\mathcal{L}_{\mathrm{mask}}$, rendered depth에서 계산한
+normal과 식 \eqref{eq:unit-normal} 사이의 $\mathcal{L}_{\mathrm{normal}}$, 같은 pixel에
+기여하는 surfel들의 depth가 불필요하게 벌어지는 것을 억제하는
+$\mathcal{L}_{\mathrm{dist}}$이다. 전체 손실을
+\begin{equation}
+  \mathcal{L} = \mathcal{L}_{\mathrm{app}}
+  + \lambda_m \mathcal{L}_{\mathrm{mask}}
+  + \lambda_n \mathcal{L}_{\mathrm{normal}}
+  + \lambda_d \mathcal{L}_{\mathrm{dist}}
+  \label{eq:total-loss}
+\end{equation}
+로 둔다.
+
+\caveat{%
+기하가 Chan--Vese 표면에 고정되므로 이 손실은 경계를 바꿀 수 없다. 구현은 anchor,
+접선축, 법선을 최적화 불가능한 버퍼로 등록하여 이를 학습률이 아니라 \emph{구조적으로}
+보장한다(제 \ref{sec:impl-decisions}절). 따라서 식 \eqref{eq:total-loss}의 기하 항들은
+통상의 2DGS에서와 다른 역할을 한다. 표면을 개선할 수는 없고, 고정된 표면을 원반이
+덮는 방식만 개선한다.}
+
+\subsection{재생 시 프레임 예산}
+
+재생 중 프레임당 계산은 표면 loading, 식 \eqref{eq:projection-iter}의 소수 갱신,
+식 \eqref{eq:unit-normal}--\eqref{eq:transport-normalize}의 orientation 갱신, 식
+\eqref{eq:compositing}의 래스터화이다. 목표 조건은
+\begin{equation}
+  T_{\mathrm{frame}} = T_{\mathrm{surface}} + T_{\mathrm{project}}
+  + T_{\mathrm{orient}} + T_{\mathrm{raster}} < 33.3\,\mathrm{ms}
+  \label{eq:frame-budget}
+\end{equation}
+이다. 네 항을 각각 계측한다.
+
+\section{저장 표현과 손익분기}
+\label{sec:storage-breakeven}
+
+모든 프레임의 2DGS를 저장하는 경우
+\begin{equation}
+  \Sfull = T\,N\,P_{2D}
+  \label{eq:s-full}
+\end{equation}
+이고, 제안 표현 \eqref{eq:store}은
+\begin{equation}
+  \Sours = N P_{2D} + \sum_t S(\surft) + T\,N\,P_r
+  \label{eq:s-ours}
+\end{equation}
+이다. $P_{2D}$는 한 surfel의 parameter 수, $P_r$은 잔차 parameter 수이다. 압축비는
+\begin{equation}
+  \CR = \frac{\Sfull}{\Sours}
+  \label{eq:cr}
+\end{equation}
+로 계산한다.
+
+\paragraph{손익분기 조건.}
+$\Sours = \Sfull$을 프레임당 표면 예산에 대해 풀면
+\begin{equation}
+  S^{\ast}(\surf) = \frac{T N P_{2D} - N P_{2D} - T N P_r}{T}
+  = N P_{2D}\left(1 - \frac{1}{T}\right) - N P_r
+  \label{eq:breakeven}
+\end{equation}
+을 얻는다. 프레임당 표면 저장량이 $S^\ast$를 넘으면 $\CR<1$이 되어 전 프레임 2DGS를
+저장하는 것이 오히려 싸다. 식 \eqref{eq:breakeven}이 음수이면 잔차만으로도 이미
+$\Sfull$을 초과하므로 이 구성에서는 제안 표현이 이길 수 없다.
+
+\caveat{%
+따라서 RQ3은 ``압축비가 얼마인가''가 아니라 ``애초에 1을 넘는가''를 먼저 묻는다.
+구현은 표면을 mesh, binary mask, 좁은 띠 부호 거리의 세 방식으로 저장할 때의 크기를
+\emph{모두} 보고하고, 이론적 바이트 수와 실제 파일 크기를 나란히 제시한다.}
+
+\section{중간 시점 보간}
+\label{sec:interpolation}
+
+원 cine CMR이 20--40 phase라 하더라도 재생을 부드럽게 하기 위해 인접 표면의 부호
+거리와 잔차를 보간할 수 있다. $\tau = t+\beta$, $0\le\beta\le1$에 대하여
+\begin{equation}
+  \lev_\tau = (1-\beta)\levt + \beta \lev_{t+1},
+  \qquad
+  \Delta \amp_\tau = (1-\beta)\Delta \amp_t + \beta \Delta \amp_{t+1}
+  \label{eq:interpolation}
+\end{equation}
+로 두고 같은 법선 정사영을 적용한다.
+
+\caveat{%
+이는 \textbf{표시를 부드럽게 하는 보간일 뿐}이며, 관측되지 않은 임상 정보를 새로
+복원하는 것으로 해석하지 않는다. 명제 \ref{prop:interp-eikonal}은 보간된 level-set이
+참 중간 표면의 부호 거리 함수가 아님을 정량적으로 보이고, 명제
+\ref{prop:interp-projection}은 그것이 정사영에 주입하는 오차를 명시한다. 임상적으로
+유효한 중간 표면이 필요하면 그 시점의 영상을 직접 분할해야 한다.}

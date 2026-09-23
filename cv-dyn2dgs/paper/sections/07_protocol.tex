@@ -1,0 +1,419 @@
+\chapter{실험 설계}
+\label{ch:protocol}
+
+본 장은 무엇을 어떻게 측정할지를 사전에 확정한다. 결과가 없는 상태에서 설계를
+확정해 두는 것은 사후 선택 편향을 막기 위함이다.
+
+\section{연구 질문}
+\label{sec:rqs}
+
+\begin{description}[leftmargin=1.6cm,style=nextline]
+  \item[RQ1] 이전 level-set seed는 각 프레임의 Chan--Vese 반복 횟수와 시간을
+  줄이는가? (정리 \ref{thm:warmstart})
+  \item[RQ2] 법선 정사영은 프레임별 2DGS 최적화보다 적은 비용으로 표면과 렌더링
+  품질을 유지하는가? (식 \eqref{eq:cost-hypothesis})
+  \item[RQ3] 정준 2DGS, 프레임별 표면, 진폭 잔차 표현은 전체 2DGS 저장보다 작은가?
+  (식 \eqref{eq:cr}, \eqref{eq:breakeven})
+  \item[RQ4] 재생 시 정사영, orientation 갱신, 래스터화를 포함하여 30 FPS 이상을
+  달성하는가? (식 \eqref{eq:frame-budget})
+  \item[RQ5] 같은 Chan--Vese 표면에서 2DGS가 mesh보다 경계, depth/normal, appearance
+  또는 시간적 부드러움을 개선하는가?
+  \item[RQ6] 2D 원반은 같은 수의 얇은 3D Gaussian보다 표면 artifact와 시점 비일관성을
+  줄이는가? (명제 \ref{prop:perspective})
+\end{description}
+
+\section{기준선}
+\label{sec:baselines}
+
+모든 기준선을 \emph{동일한 파이프라인의 설정}으로 표현하였다. 별도 구현이라면 측정된
+차이가 아이디어가 아니라 엔지니어링에서 올 수 있다. Chan--Vese 솔버, 감독 뷰, 손실,
+최적화기, 타일링, 컷오프, 지표가 모두 공유 코드이며 차이는 명시된 항목뿐이다.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{기준선과 각각이 분리하는 질문.}
+\label{tab:baselines}
+\begin{tabular}{@{}lp{9.0cm}@{}}
+\toprule
+기준선 & 분리하는 것 \\
+\midrule
+\texttt{mesh-only} & 동일 표면에서 부드러운 Gaussian silhouette이 텍스처 mesh보다
+  나은가 (RQ5) \\
+\texttt{thin-3dgs} & primitive 자체: 2D 원반 대 얇은 3D 타원체 (RQ6) \\
+\texttt{independent-2dgs} & 품질 상한과 비용 하한: 매 프레임 처음부터 재최적화 (RQ2, RQ3) \\
+\texttt{param-copy} & anchor가 움직여야 하는가, 외형 보정만으로 충분한가 \\
+\texttt{closest-point} & 식 \eqref{eq:least-norm}의 법선 제약을 버리면 어떻게 되는가 \\
+\texttt{normal-no-residual} & 외형 잔차의 기여 \\
+\texttt{cold-start-cv} & 식 \eqref{eq:warmstart-init}의 웜스타트 효과 (RQ1) \\
+\texttt{cv-dyn2dgs} & 전체 방법 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+mesh 기준선은 의도적으로 강하게 구성하였다. level-set 경사에서 얻은 정점 법선,
+MRI에서 표본화한 정점 진폭, 원근 정합 보간, z-buffer에 의한 정확한 가시성을 사용한다.
+mesh가 할 수 없는 것은 부드러운 silhouette뿐이며 이것이 시험 대상이다. 다만 mesh는
+화소 단위 이진 덮음을 가지므로 silhouette IoU를 0.5에 고정하지 않고 여러 문턱값에
+대해 스윕한다.
+
+\section{외부 비교군: 무엇이 빠져 있는지}
+\label{sec:external-baselines}
+
+앞 절의 기준선은 모두 \emph{본 파이프라인의 설정}이다. 이는 귀속에는 최선이지만
+외부 타당성에는 최악이다. 발표된 방법과의 비교가 하나도 없기 때문이다. 본 절은 그
+공백을 은폐하지 않고 목록화한다. \textbf{여기 열거된 비교는 어느 것도 실시되지
+않았다.}
+
+주장은 서로 다른 세 층위에 있고, 층위를 섞으면 불공정하거나 무의미한 비교가 된다.
+층위마다 고정해야 할 것이 다르다.
+
+\begin{table}[htbp]
+\centering\small
+\caption{실시되지 않은 외부 비교군. ``고정''은 비교가 성립하기 위해 동일해야 하는
+것을, ``축''은 그 비교군이 채점될 수 있는 지표를 뜻한다.}
+\label{tab:external-baselines}
+\begin{tabular}{@{}llp{3.4cm}p{2.9cm}@{}}
+\toprule
+층위 & 비교군 & 고정 & 축 \\
+\midrule
+\multirow{3}{*}{1. 표면 공급원}
+ & nnU-Net mask $\to$ SDF~\citep{isensee2021_nnunet} & 표현, 렌더러, 지표 & Dice/HD95, $\Esurf$ \\
+ & CSTM 4D 분할~\citep{ye2025_cstm}     & 동일 & 동일 \\
+ & 정답 mask $\to$ SDF (oracle)         & 동일 & 분할/표현 오차 분리 \\
+\midrule
+\multirow{4}{*}{2. 표현 primitive}
+ & Gaussian surfels~\citep{dai2024_gaussian_surfels} & \textbf{표면}, 감독 뷰, 손실 & PSNR/SSIM, depth, normal \\
+ & 3DGS (기하 자유)~\citep{kerbl2023_3dgs}           & 감독 뷰, 지표 & 품질 대 $\Esurf$ 상충 \\
+ & DG-Mesh~\citep{liu2024_dgmesh}                    & 감독 뷰 & mesh 품질, 대응 \\
+ & biv-me mesh~\citep{dillon2026_bivme}              & 데이터 & 임상 지표, 저장량 \\
+\midrule
+\multirow{4}{*}{3. 시간 모델}
+ & Dyna3DGR~\citep{fu2025_dyna3dgr}   & 데이터(ACDC) & 추적, 전처리 시간 \\
+ & AT-GS~\citep{chen2025_atgs}        & 데이터, 뷰   & $\Eflicker$, 프레임당 시간 \\
+ & D-2DGS~\citep{zhang2025_d2dgs}, ST-2DGS~\citep{wang2024_st2dgs} & 동일 & 표면 정확도 \\
+ & Deformable 3DGS~\citep{yang2023_deformable3dgs}, 4DGS~\citep{wu2024_4dgs} & 동일 & 품질 대 비용 \\
+\midrule
+\multirow{3}{*}{4. 저장/재생}
+ & 사전렌더링 비디오 (H.265/AV1) & 시점 집합, 화질 & 바이트, FPS, 시점 수 \\
+ & Spacetime Gaussians~\citep{li2024_stg} & 데이터 & 바이트, FPS \\
+ & Cinematic Anatomy 3DGS~\citep{niedermayr2024_cinematic} & --- & 바이트, FPS \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\caveat{%
+\textbf{층위 1이 가장 시급하다.} Chan--Vese의 Dice가 nnU-Net 계열보다 낮을 것은
+거의 확실하다. 이에 대한 방어는 ``우리 Dice도 좋다''가 아니라 ``본 방법은 표면
+공급원에 무관하다''여야 하며, 그것은 공급원을 교체해 보아야만 알 수 있다. 결과가
+어느 쪽이든 정보가 된다. 품질이 올라가면 모듈성이 입증되고, 오르지 않으면 병목이
+표면이 아니라 표현이라는 뜻이며, mask에서 변환한 SDF로는 정사영이 망가진다면 그것은
+\emph{진짜 부호 거리장이 필요하다}는 측정된 근거가 되어 오히려 Chan--Vese를 쓸
+이유가 된다. oracle 표면은 분할 오차와 표현 오차를 분리하는 유일한 수단이므로 반드시
+포함해야 한다.}
+
+\caveat{%
+\textbf{AT-GS~\citep{chen2025_atgs}는 방법 공간에서 가장 가까운 이웃이며, 원 제안서가
+지목하지 못한 비교군이다.} 정준 Gaussian surfel 집합, 직전 프레임에서의 초기화,
+적응적 densification, 그리고 곡률 map의 시간 일관성 항으로 흔들림을 억제한다는 점까지
+본 연구와 기제가 겹친다. 결정적 차이는 단 하나로, AT-GS는 기하를 \emph{학습}하고 본
+연구는 기하를 변분적 표면에 \emph{고정}한다. 프레임당 학습 시간을 보고하므로 본 연구의
+전처리 비용과 직접 대응한다. 이 비교의 부재는 심사에서 지적될 수
+있는 공백이다.}
+
+\caveat{%
+\textbf{층위 4는 본 논문의 저장량 주장을 위협한다.} 첫째, 시점을 몇 개로 고정한다면
+사전렌더링한 비디오 코덱이 어떤 3D 표현보다도 작고 빠르다. 따라서 식
+\eqref{eq:cr}의 주장은 \emph{자유 시점}이 필요할 때로 한정되며, 이
+경계는 주장이 아니라 손익분기 시점 수로 \emph{측정}되어야 한다. 둘째, 압축된 4DGS
+계열은 동적 장면 전체를 수 MB로 보고하고 있고, 의료 영역에서도 Cinematic Anatomy
+3DGS가 수 GB 볼륨을 70\,MB 이하로 줄여 60\,FPS로 렌더링한다고
+보고한다~\citep{niedermayr2024_cinematic}. 이들은 정적 볼륨 또는 일반 장면이라
+과제가 다르지만, ``표면만 저장하므로 작다''는 주장을 이들과 대조하지 않고 제시하는
+것은 불충분하다.}
+
+다음 비교는 \textbf{하지 않는 것이 옳다}. (i) 본 연구의 Dice를 발표된 ACDC 딥
+네트워크 수치와 같은 표에 넣는 것---과제가 다르다(본 연구는 SDF가 필요하고 그들은
+mask만 낸다). (ii) 볼륨을 렌더링하는 방법과 PSNR을 비교하는 것---본 연구는 표면을
+렌더링한다. (iii) Dyna3DGR의 발표 시간과 본 연구의 전처리 시간을 직접 비교하는
+것---하드웨어, 데이터, 목적이 다르다.
+
+\subsection{구현된 것과 고정된 것}
+\label{sec:comparison-impl}
+
+표 \ref{tab:external-baselines}의 비교 중 세 층위는 외부 코드 없이 본 파이프라인
+안에서 수행할 수 있으며, 그 부분은 구현되어 있다.
+
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{층위 1}: \texttt{levelset/surface\_source.py}. Chan--Vese, 외부 mask,
+  oracle을 같은 인터페이스로 교체한다. 부분 관측 문제를 형 수준에서 강제한다---ACDC의
+  oracle은 ED/ES만 덮으므로 \texttt{require\_full()}이 전 주기 지표를 거부한다.
+  \texttt{sdf\_fidelity()}는 eikonal 위반과 \emph{staircase index}를 함께 보고하여,
+  정사영 저하가 관측될 때 그 원인이 영등위면의 voxel 양자화인지를 지목한다.
+  \item \textbf{층위 2}: \texttt{surfel/free3dgs.py}. 위치, 방향, 세 축 scale 전부를
+  최적화하는 3D Gaussian이다. \texttt{SurfelSet2D}와 정확히 거울상이다---거기서는
+  기하가 buffer이고 여기서는 기하가 parameter이므로, 설정으로 서로 바꿀 수 없다.
+  초기화 방식이 결과를 바꾸므로 기본값을 두지 않고 이름에 포함시켰다.
+  \item \textbf{층위 4}: \texttt{metrics/viewpoint.py}. 손익분기 시점 수를 계산한다.
+  비트레이트 기본값을 \emph{제공하지 않는다}---실측이거나 근거를 명시한 가정이어야
+  하며, 경쟁자의 수치를 추측하는 것은 자기 수치를 추측하는 것보다 나쁘다.
+\end{itemize}
+
+진짜 외부 방법은 재구현하지 않는다. 누군가의 방법을 재구현해서 졌다고 보고하는 것은
+가장 신뢰할 수 없는 비교이며, 모든 차이가 재구현 탓으로 귀속될 수 있다. 대신
+\texttt{external/manifest.json}이 각 대상을 commit SHA로 고정하고,
+\texttt{scripts/fetch\_external.py}가 필요할 때만 clone하며,
+\texttt{experiments/external.py}가 그 출력을 \emph{내부 기준선과 동일한} ray-march
+기준(제 \ref{sec:metrics}절)에 대해 채점한다. 외부 방법이 제공하지 않은 채널은
+0으로 채우지 않고 미측정으로 남긴다. 깊이를 내보내지 않은 방법은 깊이 RMSE에서
+무한히 나쁜 점수를 받는 것이 아니라 \emph{채점되지 않는다}.
+
+\input{tables/external_status}
+
+\caveat{%
+외부 코드는 본 저장소에 포함하지 않는다. 대상 중 넷은 법적으로 재배포할 수 없다.
+\texttt{gaussian\_surfels}와 \texttt{cinematic-gaussians}는 LICENSE 파일이 아예 없어
+기본 저작권이 적용되며, Inria/MPII의 3DGS와 2DGS는 연구 전용 라이선스로 재배포가
+제한된다. 실행과 평가는 가능하지만 복제 배포는 불가하다. 부수적으로 전부 포함하면
+약 1.2\,GB가 늘고 전송 patch의 순수 텍스트 성질이 깨진다. 무엇보다 commit SHA 고정이
+더 재현 가능하다---고정된 SHA는 어떤 수치가 정확히 어느 commit에서 나왔는지를 기록하고,
+복사본은 누군가 한때 무엇을 복사했다는 사실만 기록한다.}
+
+\input{tables/layer1_source}
+\input{tables/layer2_free_geometry}
+\input{tables/layer4_viewpoint}
+
+\section{데이터}
+\label{sec:data}
+
+새로운 의료 데이터셋이나 수동 label을 제작하지 않는다.
+
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{합성 팬텀} (제 \ref{sec:phantom}절): 수렴률 검증과 기하 정확도.
+  유일하게 정확한 부호 거리 함수와 법선을 제공한다.
+  \item \textbf{ACDC}~\citep{bernard2018_acdc}: 150명의 단기축 cine CMR과 ED/ES
+  분할. 웜스타트 수렴시간, ED/ES에서의 Dice/HD95, 전처리시간과 모델 크기 비교,
+  전 주기 FPS와 시간적 흔들림.
+  \item \textbf{M\&Ms-2}~\citep{martinisla2023_mnms2}: 360명의 multi-center,
+  multi-vendor cine CMR. 다른 병원, scanner, 질환에서 표면 추적과 appearance가
+  유지되는지 확인. LAX 영상은 fitting에 쓰지 않고 새로운 시점에서의 일관성 검사에만
+  사용한다. 필요하면 1차 M\&Ms~\citep{campello2021_mnms}를 추가 외부 도메인으로
+  쓸 수 있다(좌심실과 심근 대상이며 M\&Ms-2와 다른 데이터셋이다).
+  \item \textbf{STACOM 2011 Motion Tracking}~\citep{tobongomez2013_benchmarking}
+  (선택적): 운동 정답을 포함하므로, 법선 형상 이동만 모델링할 때 실제 조직 추적에서
+  어느 정도 정보가 손실되는지를 보이는 보조 실험에 사용한다. 이 결과는 본 방법을
+  strain 추정 방법으로 제시하기 위한 것이 \emph{아니라}, 제
+  \ref{sec:tangential}절의 한계를 정량화하기 위한 것이다.
+\end{itemize}
+
+\caveat{%
+정답은 ED와 ES에만 존재한다. 중간 프레임은 영상 재현과 시간적 안정성 평가에만
+사용하며 분할 정답이 있다고 가정하지 않는다. 구현의 로더는 중간 프레임의 mask를
+\texttt{None}으로 두어 이를 형 수준에서 강제한다.}
+
+\subsection{데이터의 출처와 ``올바른 사본''}
+\label{sec:data-provenance}
+
+위 데이터셋은 모두 개별 등록과 데이터 사용 동의가 필요하므로 자동으로 받을 수 없다.
+\texttt{external/datasets.json}이 각 데이터셋의 출처, 라이선스, 인용 의무, 어느 비교에
+쓰이는지, 그리고 \texttt{cvdyn2dgs/data/real.py}가 실제로 glob하는 디스크 배치를
+기록한다. \texttt{scripts/fetch\_datasets.py}는 게이트된 데이터셋을 우회하지 않고
+무엇을 해야 하는지만 안내한 뒤, 수동으로 받은 사본을 \emph{검증}한다.
+
+검증의 핵심은 파일 존재 여부가 아니라 \textbf{voxel 기하}다.
+
+\caveat{%
+\textbf{리샘플링된 사본은 기여 1을 조용히 무효화한다.} 본 논문의 첫 기여는 spacing을
+반영한 이산화이며, 그 ablation(\texttt{spacing\_aware=False})은 비등방 데이터에서만
+차이를 낼 수 있다. ACDC의 층간격은 통상 5--10\,mm이고 면내 간격은 1.4--1.8\,mm이다.
+편의를 위해 재표본화된 공개 사본을 쓰면 ablation 결과가 \emph{평탄}하게 나오는데,
+평탄한 결과는 ``효과가 없다''는 음성 결과로 읽히지 실제 원인인 ``측정 자체가
+불가능하다''로 읽히지 않는다. 검증기는 이를 두 단계로 막는다. 첫째, 층간격 대 면내
+간격 비가 2 미만이면 거부한다. 둘째--- 그리고 이것이 필요한 이유가 있다---층간격을
+보존한 채 면내만 재표본화한 사본(예: $1\times1\times10$\,mm로 재표본화하고
+$192\times192$로 중앙 crop한 공개 미러)은 비율 검사를 \emph{통과}하므로, 알려진
+미러를 spacing과 면내 크기 지문으로 직접 대조한다. 또한 다기관 데이터인데 모든 피험자의
+spacing이 동일하다면 그 자체를 재표본화의 증거로 보고 거부한다.}
+
+이 검증기는 NIfTI 헤더를 표준 라이브러리만으로 해석하므로 \texttt{nibabel}이나
+PyTorch를 설치하기 전에 실행된다. 즉 데이터를 받은 직후 가장 먼저 실행할 수 있으며,
+잘못된 사본으로 전체 실험을 돌린 뒤에야 깨닫는 일을 방지한다. 헤더 해석과 매니페스트
+정합성은 \texttt{scripts/verify\_kernels.py}의 제 15--16절 검사로 덮여 있고 실제로
+실행된다(표 \ref{tab:kernel-results}).
+
+현실적 표본 범위는 팬텀으로 구현 검증, ACDC 20--30명으로 핵심 효율 및 품질 비교,
+M\&Ms-2 10--20명으로 외부 도메인 검증이다. 환자별 최적화 방식이므로 대규모 학습은
+필요하지 않다.
+
+\section{지표}
+\label{sec:metrics}
+
+\paragraph{전처리 효율.}
+첫 프레임 2DGS 구축시간, 프레임별 Chan--Vese 시간, 정사영/orientation/잔차 계산시간,
+전체 wall-clock time과 peak GPU memory를 \emph{구분하여} 측정한다. 식
+\eqref{eq:cost-hypothesis}을 항별로 확인하기 위함이다.
+
+\paragraph{비용은 통화가 둘이다.}
+본 파이프라인은 성격이 전혀 다른 두 곳에서 시간을 쓰며, 이를 합산하거나 구분 없이 나란히
+적으면 비교 불가능한 것을 비교하게 만든다. \emph{전처리}(Chan--Vese, 정사영, 전송, 밀도
+제어, 잔차 해)는 환자당 오프라인으로 \textbf{한 번} 지불하므로 수 분이 걸려도 사용에
+지장이 없다. \emph{재생}(표면 읽기, 정사영, 방향, rasterisation)은 표시되는 \textbf{매}
+프레임마다 지불하므로 33.3\,ms 예산이 적용되는 쪽은 이것이다. 저장량은 시간이 아니라
+공간으로 한 번 지불하며 위 둘과 교환된다. 세 통화 사이에 정당한 환율은 없으므로 본 논문은
+단일 비용 점수를 만들지 않는다. \texttt{metrics/costquality.py}의 \texttt{Cost}는
+스칼라 변환 요청에 예외를 던져 이를 구조적으로 막는다---환율을 발명하면 프레임당 성능
+저하가 전처리 속도 향상 뒤에 숨을 수 있기 때문이다.
+
+\paragraph{재생.}
+표면 loading, surfel 갱신, 래스터화, UI overhead를 각각 측정하고 평균 latency, 95번째
+백분위 latency, FPS를 보고한다. 성공 기준은 \emph{95번째 백분위}가 33.3\,ms 미만인
+것이다. 평균만 보는 기준은 열 프레임마다 끊기는 viewer를 통과시킨다.
+
+여기에 두 가지를 더한다. 첫째, \textbf{단계별 $p_{95}$}를 보고한다(표
+\ref{tab:frame-budget-stages}). 총 $p_{95}$만으로는 끊긴다는 사실만 알 수 있고 어느 단계
+때문인지는 알 수 없는데, 네 단계의 해결책은 서로 완전히 다르다. 또한 평균 비용이 가장 큰
+단계가 꼬리를 만드는 단계와 일치하지 않을 수 있으므로---평소에는 저렴하지만 타일 예산을
+간헐적으로 초과하는 rasteriser가 그 예다---귀속은 가장 느린 프레임들에 대해 계산한다.
+둘째, \textbf{헤드룸} $33.3/p_{95}$를 보고한다. 통과/실패 이진값만으로는 ``간신히
+통과''와 ``세 배 여유''를 구별할 수 없는데, 이 둘은 surfel 수나 해상도를 늘렸을 때 결과가
+유지될지에 대해 전혀 다른 함의를 갖는다.
+
+\paragraph{저장량.}
+식 \eqref{eq:s-full}--\eqref{eq:cr}을 바이트 단위로, 색인과 점유 비트마스크 오버헤드를
+포함하여 계산한다. 표면을 mesh, binary mask, 좁은 띠 부호 거리로 저장하는 세 경우를
+\emph{모두} 보고하고, 이론적 값과 실제 파일 크기를 나란히 제시한다. 식
+\eqref{eq:breakeven}의 손익분기 예산도 함께 보고한다.
+
+\paragraph{표면 정확도.}
+ED/ES label에 대해 Dice, HD95, 평균 대칭 표면 거리를 mm 단위로 계산한다. surfel 중심의
+표면 잔차 $\Esurf$(식 \eqref{eq:e-surf})도 측정한다. 두 지표는 다른 질문에 답한다.
+Dice/HD95는 표면이 해부학적으로 옳은지를, $\Esurf$는 anchor가 그 표면 위에 실제로
+놓였는지를 묻는다. anchor가 잘못된 표면 위에 완벽하게 놓일 수도 있고, 옳은 표면
+주위에 흩어질 수도 있다.
+
+\paragraph{렌더링 품질.}
+투영된 Chan--Vese mask와 rendered alpha mask 사이의 silhouette IoU(문턱값 스윕)와
+boundary F-score, 동일 표면에서 얻은 참조 depth/normal에 대한 depth RMSE와 normal
+angular error, hole 비율과 과도한 overlap 비율을 측정한다.
+
+\paragraph{외형.}
+원래 뷰로 투영한 영상과 관측 영상 사이의 PSNR, SSIM, NRMSE를 전체 영상과 심장 ROI에
+대해 \emph{각각} 보고한다. 검은 배경이 전체 영상 PSNR을 무의미하게 부풀리기 때문이다.
+
+\paragraph{시간적 안정성.}
+동일한 고정 시점에서 인접 렌더링 프레임의 차이를 입력의 실제 프레임 차이와 비교한다.
+\begin{equation}
+  \Eflicker = \frac{1}{T-1}\sum_t
+  \norm{\bigl(\Chat_t - \Chat_{t-1}\bigr) - \bigl(C^{\mathrm{ref}}_t - C^{\mathrm{ref}}_{t-1}\bigr)}_1.
+  \label{eq:flicker}
+\end{equation}
+참조 차이를 빼는 것이 핵심이다. 그래야 정지한 모델이 보상받지 않는다. 시간적으로
+얼어붙은 렌더러는 이 지표에서 0을 얻지 못한다.
+
+\paragraph{품질과 비용을 함께 읽는 방법.}
+\label{sec:cost-quality}
+품질과 비용을 같은 행에 두는 것은 필요하지만 충분하지 않다. 열이 열다섯 개인 표는 둘 다
+\emph{측정했다}는 사실을 보여줄 뿐 \emph{상충}이 무엇인지는 보여주지 않는다. 프레임당
+지연을 세 배로 늘려 PSNR을 0.3\,dB 얻은 방법은 넓은 표에서는 그냥 더 좋아 보인다.
+
+환율 없이도 말할 수 있는 것은 \textbf{지배(dominance)}다. 어떤 설정이 측정된 모든 축에서
+다른 설정보다 나쁘거나 같고 최소 한 축에서 엄격히 나쁘다면, 그 설정은 지배당하며 더 논할
+필요가 없다. 표 \ref{tab:cost-quality}의 Pareto 열이 이것을 보고한다. frontier에 여럿이
+남으면 실제 상충이 존재하는 것이고, 어느 것을 택할지는 수치가 아니라 응용에 대한 판단이다.
+
+\caveat{%
+지배 판정은 \emph{두 설정이 모두 측정한} 축에 대해서만 계산한다. 한쪽만 측정한 축은
+추측하지 않고 제외한다. 그 결과 어떤 방법이 \emph{불리한 축을 보고하지 않음으로써} 이기는
+일이 구조적으로 불가능하다---보고하지 않으면 그 축은 판정에서 빠지고 이익도 생기지 않는다.
+\texttt{shared\_axis\_count()}가 판정의 근거가 된 축 수를 함께 보고하므로, 축 하나에만
+의존한 판정을 독자가 알아볼 수 있다.
+
+자유 기하 3DGS가 좋은 예다. PSNR에서 이기고 $\Esurf$에서 크게 지도록 설계상 예상되며,
+따라서 두 설정 모두 frontier에 남는다. 그 상충이 평균으로 뭉개지지 않고 그대로 보이는
+것이 본 논문의 논점이다.}
+
+\input{tables/cost_quality}
+\input{tables/frame_budget_stages}
+
+\paragraph{임상적으로 해석 가능한 지표.}
+Chan--Vese 표면에서 계산한 좌심실 volume curve와
+\begin{equation}
+  \mathrm{EF} = \frac{V_{\mathrm{ED}}-V_{\mathrm{ES}}}{V_{\mathrm{ED}}}\times100\%
+  \label{eq:ef}
+\end{equation}
+를 label 기반 값과 비교한다. 이는 viewer의 시각적 품질과 분할의 계량적 유효성을
+분리해서 보여준다. EF 오차는 퍼센트 포인트로 보고한다.
+
+\section{Ablation}
+\label{sec:ablation-design}
+
+전체 설정에 대해 한 번에 하나의 기제만 토글한다.
+
+\begin{itemize}[leftmargin=2em]
+  \item 이전 level-set seed 사용 여부,
+  \item \textbf{물리적 복셀 간격 반영 여부} --- 첫 번째 기여의 유일한 직접 시험. 등방
+  격자와 $h_z/h_x\approx6.4$인 격자에서 비교하며, 격차가 비등방성과 함께 커지지 않으면
+  그 기여는 이론이 주장하는 일을 하지 않는 것이다.
+  \item 정사영 반복 횟수 $K_p\in\{1,2,3,5\}$ (명제 \ref{prop:newton-steps}),
+  \item closest-point 대 normal-only 정사영,
+  \item 등방 대 비등방 원반 (명제 \ref{prop:gauge}, \ref{prop:aniso}),
+  \item 2DGS, thin-3DGS, mesh primitive 비교,
+  \item mask/normal/depth-distortion 손실의 개별 효과,
+  \item 잔차 및 시간 정칙화 사용 여부,
+  \item 전체 대 저계수 잔차 (명제 \ref{prop:lowrank}),
+  \item repulsion/densification 사용 여부,
+  \item surfel 수와 viewer 해상도에 따른 FPS 변화.
+\end{itemize}
+
+\section{개발 단계의 평가}
+
+방법을 세 단계로 나누어 각 단계가 실제로 무엇을 얻는지 측정한다.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{개발 단계. 각 단계가 추가하는 기제.}
+\label{tab:stages}
+\begin{tabular}{@{}llp{7.2cm}@{}}
+\toprule
+단계 & 범위 & 추가 기제 \\
+\midrule
+v1 & 최소 성공 & 등방 원반, $K_p=1$, 기하 손실 없음, 밀도 제어 없음 \\
+v2 & --- & 식 \eqref{eq:total-loss}의 기하 손실, 비등방 최소회전 전송 \\
+v3 & 확장 & 곡률 적응 scale(식 \eqref{eq:curvature-scale}), repulsion, 제한된
+  densification/pruning, 시간 정칙화, 저계수 잔차 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+품질, 비용, 저장량을 함께 보고하므로 추가 계산만으로 산 품질 향상은 그것으로 드러난다.
+
+\section{가설과 통계}
+\label{sec:statistics}
+
+가설을 하나의 모호한 ``품질'' 점수로 합치지 않고 세 부분으로 분리한다.
+
+\begin{enumerate}[leftmargin=2em]
+  \item CV-Dyn2DGS는 independent 2DGS보다 전체 전처리시간과 저장량이 작으면서
+  silhouette IoU, normal error, 심장 ROI SSIM에서 사전에 정한 비열등성 마진 안에
+  들어온다.
+  \item 동일 표면과 비슷한 primitive 수에서 2DGS는 mesh 및 thin-3DGS보다 silhouette,
+  normal/depth, appearance 중 적어도 하나를 개선한다.
+  \item viewer의 95번째 백분위 latency는 33.3\,ms 미만이다.
+\end{enumerate}
+
+시간과 품질의 한쪽만 보고 결론내리지 않기 위해 각 방법의 전처리시간--품질,
+저장량--품질, FPS--품질 Pareto curve를 제시한다. 동일 환자에 여러 방법을 적용한
+paired comparison을 사용하고, 환자별 평균을 독립 표본으로 두어 bootstrap 95\% 신뢰구간을
+보고하며 필요한 경우 Wilcoxon signed-rank test를 사용한다. 여러 프레임을 서로 독립
+환자처럼 계산하지 않는다.
+
+\caveat{%
+비열등성 마진은 \textbf{본 논문에서 정하지 않았다}. 5명 규모의 pilot 결과와 측정
+noise를 보고 고정한 뒤 본 실험에서 바꾸지 않아야 하며, 결과를 본 뒤에 정하면 검정이
+무의미해진다. 마진을 결과와 함께 제시하는 것은 순환논증이다.}
+
+\caveat{%
+또한 현재 구현은 환자 수준 paired 통계를 \emph{구현하지 않았다}. 지표 산출은
+환자별로 이루어지지만 bootstrap과 Wilcoxon 집계는 실제 데이터와 함께 추가되어야 한다.
+단일 팬텀 결과는 환자에 대한 증거로 읽을 수 없다.}

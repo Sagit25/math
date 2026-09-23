@@ -1,0 +1,81 @@
+\chapter{결론}
+\label{ch:conclusion}
+
+본 논문은 cine 심장 MRI에서 얻은 Chan--Vese 분할 표면 위에 법선방향 두께가 없는 2차원
+Gaussian 서펠을 배치하여 심장 표면을 실시간으로 시각화하는 방법 CV-Dyn2DGS의 수학적
+이론을 전개하고, 이를 PyTorch로 구현하였다.
+
+\section{확립된 것}
+
+\paragraph{이론.}
+네 가지 결과를 증명하였다.
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{정리 \ref{thm:gradient-flow}}: Mumford--Shah 범함수의 이상 축약과 매끄러운
+  Heaviside/Dirac 근사로부터 Chan--Vese 에너지 \eqref{eq:cv-energy}를 얻고, 변분법으로
+  Euler--Lagrange 방정식 \eqref{eq:euler-lagrange}과 경사 흐름 \eqref{eq:gradient-flow}을
+  부분적분 단계를 생략하지 않고 유도하였다. 여기에 복셀 간격을 명시적으로 반영한 간격
+  인지 이산화 \eqref{eq:central-grad}, \eqref{eq:backward-div}, \eqref{eq:euler-update}를
+  첫 번째 기여로 제시하였다.
+  \item \textbf{정리 \ref{thm:warmstart}}: 경사 흐름의 에너지 소산(보조정리
+  \ref{lem:dissipation})과 국소 PL 조건 아래의 선형 수렴(보조정리
+  \ref{lem:linear-conv})이라는 기지 결과를 적용하여, 좁은 띠 웜스타트 초기값에 대한
+  초기 오차와 반복 횟수의 관계 \eqref{eq:iteration-bound}을 유도하고 웜스타트가
+  콜드스타트보다 적은 반복으로 수렴함 \eqref{eq:warmstart-gain}을 보였다. 전역
+  비볼록성은 인정하고 논의를 국소 근방으로 제한하였다.
+  \item \textbf{정리 \ref{thm:projection}}: 일차 Taylor 제약 \eqref{eq:linear-constraint}에
+  대한 최소 노름 논법으로 최소 법선 보정 \eqref{eq:minimal-step}과 Newton 유사 반복
+  \eqref{eq:projection-iter}을 직접 유도하고, 부호 거리 근방에서의 1--2회 수렴(명제
+  \ref{prop:newton-steps})과 이차 잔차 한계(보조정리 \ref{lem:quadratic})를 Taylor
+  나머지항 상쇄로 증명하였다.
+  \item \textbf{네 축의 오차 분석}: 접평면 프레임(명제 \ref{prop:normal-error},
+  보조정리 \ref{lem:transport-orthonormal}, 명제 \ref{prop:gauge}--\ref{prop:degeneracy}),
+  원근 정합 래스터화(명제 \ref{prop:ray-plane}--\ref{prop:perspective}), 외형 잔차(명제
+  \ref{prop:linearity}--\ref{prop:lowrank}), 중간 시점 보간(명제
+  \ref{prop:interp-eikonal}--\ref{prop:interp-projection})에 대해 오차 한계를 유도하고,
+  각 한계를 검증 지표에 대응시켰다(표 \ref{tab:error-metric}). 프레임 간 전파에서 위치
+  잔차는 매 프레임 재설정되어 누적되지 않으나 방향 오차는 표류할 수 있음을 보였다(명제
+  \ref{prop:propagation}).
+\end{enumerate}
+
+\paragraph{구현.}
+49개 모듈로 위 이론을 구현하였다. 이 과정에서 이론이 명시하지 않은 자유도 세 가지를
+특정 방식으로 고정하였고 그 선택을 기록하였다. 감독 신호를 광선 행진으로 정의한 것,
+기하를 버퍼로 등록하여 최적화 불가능성을 구조적으로 보장한 것, 그리고 저장 표현이
+임의 시점 탐색을 지원하는지의 문제를 명시한 것이다(제 \ref{sec:impl-decisions}절).
+
+\paragraph{검증.}
+PyTorch를 필요로 하지 않는 이산 논리 커널 41개 항목을 독립 참조와 대조하여 검증하였다
+(제 \ref{sec:kernel-results}절). 이 과정에서 검증 자체의 결함을 찾은 사례가 있었고,
+오류 개수가 포함--배제 예측값과 정확히 일치한다는 사실이 대상 알고리즘의 정확성에 대한
+증거가 되었다.
+
+\section{확립되지 않은 것}
+
+\caveat{%
+본 연구의 \textbf{실험적 주장은 하나도 확인되지 않았다}. 구현은 완성되었으나 실행되지
+않았다. 따라서 다음은 모두 열려 있다.
+\begin{itemize}[leftmargin=1.5em,topsep=2pt]
+  \item 식 \eqref{eq:cost-hypothesis}의 비용 부등식이 성립하는가 (RQ1, RQ2),
+  \item $\CR>1$인가, 즉 제안 표현이 애초에 더 작은가 (RQ3),
+  \item 95번째 백분위 프레임 latency가 33.3\,ms 미만인가 (RQ4),
+  \item 2DGS가 동일 표면의 mesh보다 어느 지표에서든 나은가 (RQ5),
+  \item 2D 원반이 얇은 3D Gaussian보다 나은가 (RQ6).
+\end{itemize}
+제 \ref{ch:discussion}장은 이 중 어느 결과가 나오든 어떤 결론을 내릴지를 사전에
+확정해 두었다. 특히 RQ5가 부정적이면 ``이 목적에는 mesh가 더 적절하다''가 올바른
+결론이며, 그 경우에도 위 이론적 기여는 유지된다.}
+
+\section{맺음말}
+
+본 연구의 수학적 중심은 식 \eqref{eq:cv-energy}의 변분 분할, 식 \eqref{eq:minimal-step}의
+최소법선 이동 유도, 식 \eqref{eq:surfel-point}의 2차원 표면 매개변수화, 식
+\eqref{eq:transport-project}--\eqref{eq:transport-normalize}의 접평면 갱신, 그리고 식
+\eqref{eq:residual-ls}의 정칙화된 잔차 추정이다. Viewer는 이러한 모델의 효율과 활용
+가능성을 보여주는 응용 결과이지 그 자체가 기여는 아니다.
+
+본 논문이 기여하는 바를 한 문장으로 요약하면 다음이다. \emph{분할이 이미 계산한 미분
+정보를 렌더링 primitive의 시간 갱신에 직접 사용할 수 있으며, 그 갱신의 오차를 네 축으로
+분해하여 각각 한계지을 수 있다.} 이 갱신이 실제로 프레임별 재최적화보다 싸고 충분히
+정확한지는 실험이 답할 문제이며, 그 실험을 수행할 수 있는 시스템과 그것을 정직하게
+보고할 수 있는 구조를 함께 제시하였다.

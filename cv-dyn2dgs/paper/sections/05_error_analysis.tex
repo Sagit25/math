@@ -1,0 +1,739 @@
+\chapter{오차 분석}
+\label{ch:error}
+
+본 장은 제 \ref{ch:method}장의 각 구성요소가 남기는 오차를 명시적으로 한계짓고, 각
+한계를 제 \ref{ch:protocol}장의 검증 지표에 대응시킨다. 네 축으로 나눈다. 접평면
+프레임(제 \ref{sec:frame-error}절), 원근 정합 래스터화(제 \ref{sec:raster-error}절),
+외형 잔차(제 \ref{sec:residual-error}절), 중간 시점 보간(제 \ref{sec:interp-error}절).
+마지막으로 프레임 간 전파를 다룬다(제 \ref{sec:propagation}절).
+
+\section{정사영 잔차}
+\label{sec:projection-error}
+
+\begin{lemma}[이차 잔차 한계]
+\label{lem:quadratic}
+$\levt$가 $\anchor^{(k)}$를 포함하는 볼록 근방에서 $C^2$이고 그 근방에서 Hessian의
+노름이 $\norm{D^2\levt}\le M$으로 유계라 하자. $\varepsilon=0$인 반복
+\eqref{eq:projection-iter}에 대하여
+\begin{equation}
+  \Bigl\lvert \levt\bigl(\anchor^{(k+1)}\bigr)\Bigr\rvert
+  \le \frac{M}{2\norm{\gradh\levt(\anchor^{(k)})}^2}
+      \Bigl\lvert \levt\bigl(\anchor^{(k)}\bigr)\Bigr\rvert^2
+  \label{eq:quadratic-bound}
+\end{equation}
+가 성립한다. 따라서 $\gradh\levt$가 영에서 떨어진 표면 근방에서 반복은 잔차를 이차
+속도로 영에 수렴시킨다.
+\end{lemma}
+
+\begin{proof}
+표기를 줄여 $g := \gradh\levt(\anchor^{(k)})$, $r_k := \levt(\anchor^{(k)})$라 하자.
+$\varepsilon=0$이면 보정은
+$d^{(k)} = \anchor^{(k+1)}-\anchor^{(k)} = -r_k\,g/\norm{g}^2$이다. $\levt$의 이차
+Taylor 전개를 Lagrange형 나머지항과 함께 쓰면, $\anchor^{(k)}$와 $\anchor^{(k+1)}$을
+잇는 선분 위의 어떤 점 $\xi$에 대하여
+\begin{equation}
+  \levt\bigl(\anchor^{(k+1)}\bigr)
+  = \levt\bigl(\anchor^{(k)}\bigr) + g\transp d^{(k)}
+  + \tfrac{1}{2}\bigl(d^{(k)}\bigr)\transp D^2\levt(\xi)\,d^{(k)}.
+  \label{eq:taylor2}
+\end{equation}
+일차항을 계산하면
+$g\transp d^{(k)} = g\transp\bigl(-r_k g/\norm{g}^2\bigr) = -r_k\norm{g}^2/\norm{g}^2 = -r_k$
+이므로 식 \eqref{eq:taylor2}의 처음 두 항 $r_k + (-r_k) = 0$이 \emph{정확히 상쇄}된다.
+따라서 나머지항만 남아
+\[
+  \levt\bigl(\anchor^{(k+1)}\bigr)
+  = \tfrac{1}{2}\bigl(d^{(k)}\bigr)\transp D^2\levt(\xi)\,d^{(k)}.
+\]
+Hessian 노름 유계와 Cauchy--Schwarz에 의해, 그리고
+$\norm{d^{(k)}} = \abs{r_k}\norm{g}/\norm{g}^2 = \abs{r_k}/\norm{g}$를 사용하면
+\[
+  \Bigl\lvert\levt\bigl(\anchor^{(k+1)}\bigr)\Bigr\rvert
+  \le \tfrac{1}{2}M\norm{d^{(k)}}^2
+  = \tfrac{1}{2}M\frac{\abs{r_k}^2}{\norm{g}^2}
+\]
+이고 이것이 식 \eqref{eq:quadratic-bound}이다. 표면 근방에서 $\norm{g}\ge g_0>0$이면
+상수 $C := M/(2g_0^2)$에 대해 $\abs{r_{k+1}}\le C\abs{r_k}^2$이므로, 초기 잔차가
+$C\abs{r_0}<1$을 만족하면 $\abs{r_k}\to0$이 이차 속도로 성립한다.
+\end{proof}
+
+\begin{remark}[정규화 $\varepsilon$의 대가]
+$\varepsilon>0$은 분모를 $\norm{g}^2+\varepsilon$으로 바꾸어 일차항 상쇄를
+$g\transp d^{(k)} = -r_k\norm{g}^2/(\norm{g}^2+\varepsilon)$으로 만든다. 이 경우 처음
+두 항의 합은 $r_k\varepsilon/(\norm{g}^2+\varepsilon)$로,
+$\varepsilon/(\norm{g}^2+\varepsilon)$에 비례하는 \emph{일차} 잔차가 남는다.
+$\varepsilon \ll \norm{g}^2$이면 이 항은 무시할 만하고 식
+\eqref{eq:quadratic-bound}의 이차 거동이 지배한다. 즉 $\varepsilon$은 경사가 작은 곳의
+수치 안정성을 위한 대가로 아주 작은 일차 잔차를 남긴다.
+\end{remark}
+
+반복 투영이 끝난 최종 anchor에서의 잔차는 표면 정렬 오차 지표
+\begin{equation}
+  \Esurf = \frac{1}{N}\sum_{i=1}^{N}\abs{\levt(\anchor^t_i)}
+  \label{eq:e-surf}
+\end{equation}
+로 곧바로 측정된다.
+
+\section{접평면 프레임 오차}
+\label{sec:frame-error}
+
+\subsection{단위 법선의 각오차}
+
+\begin{proposition}[단위 법선의 각오차 한계]
+\label{prop:normal-error}
+점 $\anchor^t_i$에서 참 경사를 $g := \nabla\levt(\anchor^t_i)\ne0$, 그 이산 근사를
+$g_h := \gradh\levt(\anchor^t_i)$라 하고 절단 오차를 $e_h := g_h - g$로 두자. 중심
+차분 \eqref{eq:central-grad}의 경우
+$\norm{e_h} \le C_h\,\hmax^2\,\norm{D^3\levt}_\infty$로 이차 절단 오차를 가진다고
+가정한다. 참 단위 법선 $\nrm = g/\norm{g}$와 $\varepsilon$ 정규화 법선
+$\nrm_\varepsilon = g_h/(\norm{g_h}+\varepsilon)$ 사이의 각 $\theta$는
+\begin{equation}
+  \sin\theta = \frac{\norm{g_h - (g_h\cdot \nrm)\nrm}}{\norm{g_h}}
+  \le \frac{\norm{e_h}}{\norm{g_h}}
+  \label{eq:sin-theta}
+\end{equation}
+을 만족한다. 특히 $\varepsilon$ 정규화는 벡터의 크기만 바꾸고 방향은 바꾸지 않으므로
+각오차에 기여하지 않으며, 표면 근방에서 $\norm{g}\ge g_0>0$이면
+\begin{equation}
+  \sin\theta \le \frac{C_h \hmax^2 \norm{D^3\levt}_\infty}{g_0} = O\bigl(\hmax^2\bigr)
+  \label{eq:normal-rate}
+\end{equation}
+로 $\hmax\to0$일 때 소멸한다.
+\end{proposition}
+
+\begin{proof}
+$\nrm_\varepsilon$은 $g_h$의 양의 스칼라배이므로 그 방향은 $g_h$와 같다. 따라서
+$\nrm_\varepsilon$과 $\nrm$ 사이의 각은 $g_h$와 $\nrm$ 사이의 각과 같다. 단위 벡터
+$\nrm$에 대한 $g_h$의 직교 성분은 $g_h^\perp = g_h - (g_h\cdot\nrm)\nrm$이고, 정의에
+의해 $\sin\theta = \norm{g_h^\perp}/\norm{g_h}$이다. 이제 $g = \norm{g}\nrm$이므로
+$\nrm$에 수직인 성분만 보면 $g^\perp=0$이고 따라서
+\[
+  g_h^\perp = (g+e_h)^\perp = g^\perp + e_h^\perp = e_h^\perp,
+\]
+즉 $g_h$의 수직 성분은 오차 $e_h$의 수직 성분과 같다. 그러므로
+$\norm{g_h^\perp} = \norm{e_h^\perp} \le \norm{e_h}$이고 식 \eqref{eq:sin-theta}이
+성립한다. 역삼각부등식에 의해 $\norm{g_h}\ge\norm{g}-\norm{e_h}$이므로 표면 근방에서
+$\norm{e_h}\ll\norm{g}$일 때 최고차 항에서 $\sin\theta \le \norm{e_h}/\norm{g}$의
+형태가 되고, 가정한 이차 절단 오차와 $\norm{g}\ge g_0$을 대입하면 식
+\eqref{eq:normal-rate}을 얻는다. $\levt$가 표면 근방에서 부호 거리 함수에 가까우면
+$\norm{g}\approx1$이므로 $g_0\approx1$로 두어도 좋다.
+\end{proof}
+
+\caveat{%
+식 \eqref{eq:normal-rate}은 \emph{수렴률}에 대한 주장이므로 단일 해상도에서는 검증할
+수 없다. 제 \ref{sec:kernel-verification}절의 검증은 이 항목을 포함하지 않으며,
+$\spacing$을 변화시키며 $\log\sin\theta$ 대 $\log\hmax$의 기울기를 적합하는 실험이
+필요하다. 합성 팬텀이 존재하는 이유가 바로 이것이다. 실제 데이터셋은 정확한 법선을
+제공하지 않고 $\spacing$을 임의로 바꿀 수도 없다.}
+
+\subsection{전송의 정규직교성}
+
+\begin{lemma}[접평면 프레임의 정규직교성]
+\label{lem:transport-orthonormal}
+단위 법선 $\nrm\in\Real^3$($\norm{\nrm}=1$)과 임의의 이전 축
+$e^{t-1}_1\in\Real^3$이 주어졌다고 하자. $\varepsilon=0$인 전송
+\eqref{eq:transport-project}--\eqref{eq:transport-normalize}에서
+$\bar e^t_1 = e^{t-1}_1 - (e^{t-1}_1\cdot\nrm)\nrm \ne 0$이면, 그 결과
+$e^t_1 = \bar e^t_1/\norm{\bar e^t_1}$과 $e^t_2 = \nrm\times e^t_1$으로 이루어진
+$\framemat^t = [\,e^t_1\;e^t_2\,]$은
+\begin{equation}
+  (\framemat^t)\transp\framemat^t = I_2, \qquad (\framemat^t)\transp\nrm = 0
+  \label{eq:orthonormal}
+\end{equation}
+을 만족하며, $\{\nrm, e^t_1, e^t_2\}$은 오른손 정규직교 기저이다.
+\end{lemma}
+
+\begin{proof}
+Gram--Schmidt 방식으로 단계별로 확인한다.
+
+\emph{(i) $e^t_1\cdot\nrm=0$.} $\norm{\nrm}^2=1$이므로
+\[
+  \bar e^t_1\cdot\nrm
+  = e^{t-1}_1\cdot\nrm - (e^{t-1}_1\cdot\nrm)(\nrm\cdot\nrm)
+  = e^{t-1}_1\cdot\nrm - e^{t-1}_1\cdot\nrm = 0.
+\]
+$e^t_1$은 $\bar e^t_1$의 양의 스칼라배이므로 $e^t_1\cdot\nrm=0$이다.
+
+\emph{(ii) $\norm{e^t_1}=1$.} $\bar e^t_1\ne0$이므로 정규화가 잘 정의된다.
+
+\emph{(iii) $e^t_2 = \nrm\times e^t_1$의 성질.} $\nrm$과 $e^t_1$은 서로 직교하는 단위
+벡터이므로 외적의 노름 공식에서 $\sin\angle=1$이고 $\norm{e^t_2}=1$이다. 또한 외적은
+두 피연산자 모두에 직교하므로 $e^t_2\cdot\nrm=0$, $e^t_2\cdot e^t_1=0$이다.
+
+\emph{(iv) 결론.} (i)--(iii)에서 식 \eqref{eq:orthonormal}이 성립하고,
+$\{\nrm,e^t_1,e^t_2=\nrm\times e^t_1\}$은 순서상 오른손 규칙을 따른다.
+\end{proof}
+
+\begin{remark}[$\varepsilon>0$의 편차]
+실제 사용하는 정규화는 $e^t_1 = \bar e^t_1/(\norm{\bar e^t_1}+\varepsilon)$이다. 이때
+열의 크기는
+$\norm{e^t_1} = \norm{\bar e^t_1}/(\norm{\bar e^t_1}+\varepsilon) = 1 - \varepsilon/(\norm{\bar e^t_1}+\varepsilon)$
+로 단위 크기에서 $O(\varepsilon/\norm{\bar e^t_1})$만큼 벗어난다. 반면 직교성
+$e^t_1\cdot\nrm=0$은 스칼라 정규화가 방향을 바꾸지 않으므로 \emph{정확히} 유지되며,
+$e^t_2=\nrm\times e^t_1$ 역시 방향이 보존되어 직교성이 정확하다. 즉 $\varepsilon>0$은
+열의 길이에만 일차 오차를 주고 직교성에는 영향을 주지 않는다. 필요하면 정규화 후 한
+번 더 나누어 단위 크기를 회복할 수 있으며, 구현은 이를 기본으로 수행한다.
+\end{remark}
+
+\subsection{등방 원반에서의 gauge 불변성}
+
+\begin{proposition}[등방 원반에서 면내 회전 gauge의 무해성]
+\label{prop:gauge}
+surfel이 등방, 즉 $s_{i,1}=s_{i,2}=s$이어서 $\scalemat_i = s I_2$라 하자. 임의의
+$R\in SO(2)$에 대하여 접평면 프레임을 $\framemat^t_i \mapsto \framemat^t_i R$로 바꾸면,
+(a) 표면 점 집합 $\{X(u) = \anchor+\framemat\scalemat u : u\in\Real^2\}$은 집합으로서
+불변이고, (b) Gaussian 가중치가 재매개변수화 아래 보존되며, (c) 불투명도에 들어가는
+국소 좌표의 노름 $\norm{u}$이 보존된다.
+\end{proposition}
+
+\begin{proof}
+등방이므로 $\scalemat = sI_2$이고 $R\transp R = I_2$, $\norm{R\transp u}=\norm{u}$이다.
+
+(a) 바뀐 원반의 점 집합은 $\{\anchor + s\framemat R u : u\in\Real^2\}$이다. $R$이
+$\Real^2$의 전단사이므로 $\{Ru : u\in\Real^2\} = \Real^2$이고 따라서
+$\{\anchor+s\framemat Ru\} = \{\anchor+s\framemat v\}$로 원래 집합과 같다.
+
+(b) 바뀐 프레임에서 점 $X'(u)$에 대응하는 원래 좌표는 $v = Ru$이고
+\[
+  G(v) = \exp\bigl(-\tfrac12 v\transp v\bigr)
+  = \exp\bigl(-\tfrac12 u\transp R\transp R u\bigr)
+  = \exp\bigl(-\tfrac12 u\transp u\bigr) = G(u).
+\]
+
+(c) 식 \eqref{eq:local-coord}에서 등방이면 $\scalemat^{-1}=s^{-1}I_2$가 $R$과 가환이므로
+\[
+  u' = \scalemat^{-1}(\framemat R)\transp(x-\anchor)
+     = s^{-1}R\transp \framemat\transp(x-\anchor) = R\transp u,
+\]
+이고 $\norm{u'}=\norm{R\transp u}=\norm{u}$이다. 따라서 식 \eqref{eq:alpha}의
+불투명도는 불변이다.
+\end{proof}
+
+명제 \ref{prop:gauge}이 실용적으로 중요한 이유는 두 가지이다. 첫째, 등방 원반을 쓰면
+접선 전송의 퇴화 실패 모드가 \emph{원리적으로 사라진다}. 이것이 최소 구현에서 등방
+원반을 택하는 근거이다. 둘째, 퇴화 시 접평면 안의 임의의 정규직교 축을 골라도
+무해하다는 결론의 근거가 된다.
+
+\subsection{비등방 원반에서의 잔차 한계}
+
+\begin{proposition}[비등방 원반에서의 정렬 오차 한계]
+\label{prop:aniso}
+surfel이 비등방이어서 $s_1\ne s_2$라 하고, 실제 사용된 프레임이 이상적 프레임을 각
+$\delta$만큼 면내 회전 $R_\delta\in SO(2)$한 것이라 하자. 한 표면 점의 이상적 국소
+좌표를 $u$, 어긋난 프레임에서의 좌표를 $u_\delta = \scalemat^{-1}R_\delta\scalemat u$라
+할 때
+\begin{equation}
+  \Bigl\lvert \norm{u_\delta}^2 - \norm{u}^2 \Bigr\rvert
+  \le \left\lvert \frac{s_1}{s_2}-\frac{s_2}{s_1}\right\rvert \abs{\sin\delta}\,\norm{u}^2
+  \label{eq:aniso-bound}
+\end{equation}
+로 유계이며, 이에 따라 불투명도의 상대 오차도 같은 크기로 유계이다. 등방 극한
+$s_1\to s_2$ 또는 정렬 극한 $\delta\to0$에서 우변은 영으로 수렴한다.
+\end{proposition}
+
+\begin{proof}
+$M := \scalemat^{-1}R_\delta\scalemat$로 두면 $u_\delta = Mu$이고
+$\norm{u_\delta}^2-\norm{u}^2 = u\transp(M\transp M - I_2)u$이다. 직접 계산하면
+\[
+  M = \begin{pmatrix}
+    \cos\delta & -\frac{s_2}{s_1}\sin\delta\\[0.3em]
+    \frac{s_1}{s_2}\sin\delta & \cos\delta
+  \end{pmatrix},
+\]
+따라서 대칭행렬 $A := M\transp M - I_2$의 성분은
+\[
+  A = \begin{pmatrix}
+    \bigl((s_1/s_2)^2-1\bigr)\sin^2\delta
+      & \bigl(\frac{s_1}{s_2}-\frac{s_2}{s_1}\bigr)\sin\delta\cos\delta\\[0.3em]
+    \bigl(\frac{s_1}{s_2}-\frac{s_2}{s_1}\bigr)\sin\delta\cos\delta
+      & \bigl((s_2/s_1)^2-1\bigr)\sin^2\delta
+  \end{pmatrix}.
+\]
+비대각 성분의 크기는
+$\bigl\lvert\frac{s_1}{s_2}-\frac{s_2}{s_1}\bigr\rvert\abs{\sin\delta\cos\delta}
+\le \bigl\lvert\frac{s_1}{s_2}-\frac{s_2}{s_1}\bigr\rvert\abs{\sin\delta}$이고 대각
+성분은 $O(\sin^2\delta)$의 고차항이므로, 작은 $\delta$에 대하여 $A$의 스펙트럼 노름은
+$\norm{A} \le \bigl\lvert\frac{s_1}{s_2}-\frac{s_2}{s_1}\bigr\rvert\abs{\sin\delta}
++ O(\sin^2\delta)$로 지배된다. Rayleigh 몫 부등식
+$\abs{u\transp A u}\le\norm{A}\norm{u}^2$~\citep[제 4.2절]{horn2013_matrix}에서 일차
+항까지 식 \eqref{eq:aniso-bound}을 얻는다.
+\end{proof}
+
+명제 \ref{prop:aniso}은 비등방 원반일수록 접선 전송의 정확성이 중요함을 정량적으로
+말해 준다. 이방성 비 $s_1/s_2$가 1에 가까우면 전송 오차는 무해하다.
+
+\subsection{전송의 퇴화}
+
+\begin{proposition}[전송 퇴화와 조건수]
+\label{prop:degeneracy}
+이전 접선 축 $e^{t-1}_1$(단위 벡터)과 새 법선 $\nrm^t_i$ 사이의 각을 $\psi$라 하자.
+그러면 정사영된 벡터의 노름은
+\begin{equation}
+  \norm{\bar e^t_{i,1}} = \sqrt{1-\bigl(e^{t-1}_1\cdot\nrm^t_i\bigr)^2} = \abs{\sin\psi}
+  \label{eq:sin-psi}
+\end{equation}
+이다. 따라서 $e^{t-1}_1$이 $\nrm^t_i$과 거의 평행($\psi\to0$)해지면
+$\norm{\bar e^t_{i,1}}\to0$이 되어 정규화된 축의 방향이 병적으로 민감해진다.
+정량적으로, $\bar e^t_{i,1}$에 크기 $\gamma$의 섭동이 가해지면 $\varepsilon=0$일 때
+정규화된 축의 방향 변화는
+\begin{equation}
+  \norm{\Delta e^t_1} \lesssim \frac{\gamma}{\norm{\bar e^t_{i,1}}} = \frac{\gamma}{\abs{\sin\psi}}
+  \label{eq:amplification}
+\end{equation}
+로 증폭된다.
+\end{proposition}
+
+\begin{proof}
+$e^{t-1}_1$은 단위 벡터이고 정사영 $\bar e^t_{i,1}$은 $\nrm$에 직교하는 성분이므로
+피타고라스 정리에 의해
+$\norm{\bar e^t_{i,1}}^2 = 1-(e^{t-1}_1\cdot\nrm)^2$이다. $e^{t-1}_1\cdot\nrm=\cos\psi$
+이므로 $\norm{\bar e^t_{i,1}}^2 = \sin^2\psi$, 즉 식 \eqref{eq:sin-psi}이다. 정규화 사상
+$v\mapsto v/\norm{v}$의 Jacobian은 $\frac{1}{\norm{v}}\bigl(I - \frac{vv\transp}{\norm{v}^2}\bigr)$
+이고 그 접선 성분에 대한 연산자 노름은 $1/\norm{v}$이다. 따라서 식
+\eqref{eq:amplification}이 성립한다.
+\end{proof}
+
+\begin{remark}[$\varepsilon$ 분모의 정당화와 실용적 처리]
+식 \eqref{eq:transport-normalize}의 분모 $\norm{\bar e^t_{i,1}}+\varepsilon$은 위
+증폭을 $1/\varepsilon$으로 위에서 막아 조건수를 유계로 만든다. 실용적 처리는 두
+가지이다. 첫째, $\norm{\bar e^t_{i,1}}$이 임계값보다 작으면 대신 다른 이전 축
+$e^{t-1}_2$를 정사영하여 첫 축으로 삼는다. 이 대안은 \emph{항상} 사용 가능하다.
+정규직교 쌍에 대해
+\[
+  \norm{\bar e_1}^2 + \norm{\bar e_2}^2
+  = 2 - (e_1\cdot\nrm)^2 - (e_2\cdot\nrm)^2 \ge 1
+\]
+이므로 $\max(\norm{\bar e_1},\norm{\bar e_2}) \ge 1/\sqrt2$이고, 둘이 동시에 퇴화할 수
+없다. 둘째, 등방 원반에서는 명제 \ref{prop:gauge}에 의해 면내 축의 선택이 무해하므로
+퇴화 시 접평면 안의 임의의 정규직교 축을 골라도 렌더링에 영향이 없다.
+\end{remark}
+
+\section{원근 정합 래스터화 오차}
+\label{sec:raster-error}
+
+\subsection{광선-평면 교차의 적정성}
+
+\begin{proposition}[교차의 적정성과 조건수]
+\label{prop:ray-plane}
+교차 깊이 \eqref{eq:ray-plane}은 분모 $(\nrm^t_i)\transp\raydir \ne 0$일 때에만 잘
+정의된다. 광선과 원반 평면 사이의 각을 $\psi\in[0,\pi/2]$라 하면
+$(\nrm^t_i)\transp\raydir = \pm\sin\psi$이고, 광선이 평면에 나란해질수록
+$\depthq^t_i(q)$가 발산한다. 나아가 법선의 섭동 $\delta \nrm$이나 광선의 섭동
+$\delta d$에 대한 깊이의 일차 민감도는
+\begin{equation}
+  \abs{\delta \depthq^t_i(q)}
+  \lesssim \frac{C\bigl(\norm{\delta \nrm}+\norm{\delta d}\bigr)}
+                {\bigl\lvert(\nrm^t_i)\transp\raydir\bigr\rvert}
+  \label{eq:depth-conditioning}
+\end{equation}
+로, 조건수가 $1/\lvert(\nrm^t_i)\transp\raydir\rvert$에 비례한다. 따라서 컷오프
+$\lvert(\nrm^t_i)\transp\raydir\rvert \ge c_0 > 0$을 두면 조건수는 $1/c_0$으로 유계가
+된다.
+\end{proposition}
+
+\begin{proof}
+$\nrm^t_i$와 $\raydir$가 모두 단위 벡터이므로 둘이 이루는 각을 $\theta_{nd}$라 하면
+$(\nrm^t_i)\transp\raydir = \cos\theta_{nd}$이고, 광선과 평면이 이루는 각은
+$\psi = \pi/2-\theta_{nd}$이므로 $\cos\theta_{nd}=\sin\psi$이다. 민감도를 보기 위해
+$\depthq = A/B$로 두자. 여기서 $A = (\nrm^t_i)\transp(\anchor^t_i-\camc)$,
+$B = (\nrm^t_i)\transp\raydir$이다. 몫의 미분에서
+\[
+  \delta\depthq = \frac{\delta A}{B} - \frac{A\,\delta B}{B^2}
+  = \frac{1}{B}\bigl(\delta A - \depthq\,\delta B\bigr).
+\]
+$\abs{\delta A} \le \norm{\anchor^t_i-\camc}\norm{\delta \nrm}$,
+$\abs{\delta B} \le \norm{\delta \nrm}+\norm{\delta d}$이고 시야 안에서
+$\norm{\anchor^t_i-\camc}$와 $\abs{\depthq}$가 유계이므로, 유계 상수를 $C$로 묶으면
+식 \eqref{eq:depth-conditioning}이 성립한다.
+\end{proof}
+
+\subsection{국소 좌표와 불투명도의 오차}
+
+\begin{proposition}[국소 좌표와 불투명도의 오차 한계]
+\label{prop:local-coord}
+교차점 $x^t_i(q)$의 오차를 $\delta x$, 그에 따른 국소 좌표 \eqref{eq:local-coord}의
+오차를 $\delta u$라 하자. 접평면 프레임이 정규직교이므로 $(\framemat^t_i)\transp$은
+노름을 늘리지 않고, 따라서
+\begin{equation}
+  \norm{\delta u} \le \norm{\scalemat_i^{-1}}\norm{\delta x}
+  = \frac{\norm{\delta x}}{\min\{s_{i,1},s_{i,2}\}}.
+  \label{eq:local-coord-error}
+\end{equation}
+나아가 불투명도 \eqref{eq:alpha}의 오차는
+\begin{equation}
+  \abs{\delta \alphaq^t_i(q)} \le \opa^t_i\,\norm{u}\,\norm{\delta u}
+  \label{eq:alpha-error}
+\end{equation}
+로 유계이다.
+\end{proposition}
+
+\begin{proof}
+식 \eqref{eq:local-coord}에서 $\delta u = \scalemat_i^{-1}(\framemat^t_i)\transp\delta x$
+이다. 정규직교성에서 $(\framemat^t_i)\transp$의 스펙트럼 노름은 1이므로
+$\norm{(\framemat^t_i)\transp \delta x}\le\norm{\delta x}$이고,
+$\scalemat_i^{-1}$의 스펙트럼 노름은 $1/\min\{s_{i,1},s_{i,2}\}$이다. 두 부등식을
+결합하면 식 \eqref{eq:local-coord-error}을 얻는다. 작은 scale이 좌표 오차를 증폭함을
+알 수 있다.
+
+불투명도는 $f(w) = \opa\,e^{-w/2}$($w=\norm{u}^2\ge0$)의 꼴이며
+$\abs{f'(w)}\le\tfrac12\opa$이다. 평균값 정리에 의해
+$\abs{\delta\alphaq}\le\tfrac12\opa\abs{\delta w}$이고
+$\delta w = 2u\transp\delta u + \norm{\delta u}^2$의 일차 항에서
+$\abs{\delta w}\le2\norm{u}\norm{\delta u}$이므로 식 \eqref{eq:alpha-error}을 얻는다.
+\end{proof}
+
+교차점 오차 $\delta x$ 자체는 법선 각오차(명제 \ref{prop:normal-error})와 anchor 잔차
+(보조정리 \ref{lem:quadratic})로 지배된다. 즉 오차가 기하에서 렌더링으로 전파되는
+경로가 명시적으로 추적된다.
+
+\subsection{평면 원반의 곡면 근사 오차}
+
+\begin{proposition}[평면 원반의 곡률 기반 근사 오차]
+\label{prop:planar-disk}
+surfel은 참 표면 $\surft$를 anchor에서의 접평면으로 근사한다. 그 점에서 표면의
+주곡률 크기의 최댓값을 $\kappa$라 하고, 원반의 반경을
+$s=\max\{s_{i,1},s_{i,2}\}$ 규모라 하자. 접평면을 기준면으로 하는 높이 함수
+$\eta$로 표면을 나타내면, 접점에서 옆으로 거리 $\varrho$ 떨어진 곳에서
+\begin{equation}
+  \eta(\varrho) = \tfrac{1}{2}\kappa\,\varrho^2 + O(\varrho^3)
+  \label{eq:height-function}
+\end{equation}
+이 성립하여, 참 표면과 원반 사이의 높이 오차는 원반 자락에서 $O(\kappa s^2)$이고 법선
+방향 편차는 $O(\kappa s)$이다.
+\end{proposition}
+
+\begin{proof}
+접평면을 국소 좌표계의 기준면으로, 법선을 $z$축으로 잡으면 표면이 접평면에 접하므로
+높이 함수 $\eta$는 $\eta(0)=0$, $\nabla\eta(0)=0$을 만족한다. $\eta$의 이차 Taylor
+전개는 $\eta(\zeta) = \tfrac12\zeta\transp H\zeta + O(\norm{\zeta}^3)$, $\zeta\in\Real^2$
+이며 $H$는 제2기본형식에 해당하는 대칭행렬로 그 고윳값이 주곡률이다. 반경 방향 거리
+$\varrho=\norm{\zeta}$에 대해 Rayleigh 몫 부등식
+$\abs{\zeta\transp H\zeta}\le\norm{H}\norm{\zeta}^2 = \kappa\varrho^2$을 쓰면 식
+\eqref{eq:height-function}이다. 원반 자락은 $\varrho\lesssim s$이므로 높이 오차는
+$O(\kappa s^2)$이다. 법선 방향 편차는 기울기
+$\nabla\eta(\zeta) = H\zeta + O(\norm{\zeta}^2)$의 크기가 $O(\kappa s)$이므로 접평면
+법선과 참 법선 사이의 각도 편차도 $O(\kappa s)$이다.
+\end{proof}
+
+명제 \ref{prop:planar-disk}이 식 \eqref{eq:curvature-scale}의 곡률 적응 scale의 근거이다.
+원반 크기를 $s \ll 1/\kappa$로 유지하면 근사 오차가 제어된다.
+
+\subsection{원근 정합 대 아핀 투영}
+
+\begin{proposition}[원근 정합의 정확성]
+\label{prop:perspective}
+평면 원반에 대하여 원근 정합 교차 \eqref{eq:ray-plane}--\eqref{eq:local-coord}은 국소
+좌표를 오차 없이 정확하게 계산한다. 반면 원반을 이미지 평면에 아핀 근사로 투영하면
+자락 전역에 걸친 깊이 변화를 무시하는 데서 오차가 생기며, 그 크기는 자락에 걸친 상대
+깊이 변화 $\Delta z/z$에 지배된다. 따라서 남는 오차는 곡면 근사 오차
+$O(\kappa s^2)$(명제 \ref{prop:planar-disk})뿐이다.
+\end{proposition}
+
+\begin{proof}
+surfel이 평면 원반이므로 그 위의 점은 정확히 평면 방정식
+$(\nrm^t_i)\transp(x-\anchor^t_i)=0$을 만족한다. 화소 광선 \eqref{eq:ray}을 이 평면과
+교차시키는 식 \eqref{eq:ray-plane}은 이 방정식의 정확한 해이므로, 교차점과 그로부터
+얻는 국소 좌표에는 투영 모델에서 오는 오차가 없다.
+
+아핀 근사는 화면 좌표를 anchor의 투영점 둘레에서 일차로 전개하여 자락 전역에 대해
+anchor의 깊이 $z_0$를 상수로 고정한다. 그러나 자락의 실제 점은 깊이 $z = z_0+\Delta z$를
+가지며, 원근 투영의 화면 좌표는 깊이에 반비례하므로 일차 전개가 무시한 항은
+\[
+  \frac{1}{z_0+\Delta z} - \frac{1}{z_0}\left(1-\frac{\Delta z}{z_0}\right)
+  = O\!\left(\Bigl(\frac{\Delta z}{z_0}\Bigr)^2\right),
+\]
+곧 상대 깊이 변화의 크기에 지배되는 오차를 남긴다. $\Delta z$는 surfel이 광축에 대해
+기울수록, 그리고 자락이 클수록 커지므로 아핀 오차는 가파른 각도와 큰 자락에서
+증가한다. 원근 정합 교차는 각 화소마다 참 깊이를 직접 풀어 $\Delta z$를 정확히
+반영하므로 이 항이 사라진다.
+\end{proof}
+
+이것이 thin-3DGS 기준선과의 비교(RQ6)가 측정하는 바이다. 그 기준선에서 깊이는 자락
+전역에 걸쳐 상수이므로, 깊이 지표의 차이는 명제 \ref{prop:perspective}의 직접적
+검증이 된다.
+
+\section{외형 잔차의 오차}
+\label{sec:residual-error}
+
+\subsection{진폭 선형성}
+
+\begin{proposition}[고정 기하에서 렌더링은 진폭에 아핀]
+\label{prop:linearity}
+surfel의 중심, 접평면 프레임, scale이 모두 고정되어 있으면 각 불투명도
+$\alphaq^t_i(q)$는 진폭에 무관하고, alpha 합성 결과 $\Chat_t(q)$는 surfel 색 $c^t_i$에
+대해 선형이다. 색이 진폭에 아핀이면 $\Chat_t(q)$는 진폭 벡터의 아핀 함수이며, 상수를
+흡수하면 렌더링 사상은 행렬 $A_t$로 표현되는 선형 사상이 된다.
+\end{proposition}
+
+\begin{proof}
+불투명도 \eqref{eq:alpha}은 국소 좌표 \eqref{eq:local-coord}과 불투명도 계수
+$\opa^t_i$에만 의존하는데, 이들은 기하와 광선으로만 결정되고 진폭과 무관하다. 따라서
+기하가 고정되면 $\alphaq^t_i(q)$와 그로부터 만들어지는 투과율 가중치
+\begin{equation}
+  w_i(q) := \left(\prod_{j<i}\bigl(1-\alphaq^t_j(q)\bigr)\right)\alphaq^t_i(q)
+  \label{eq:weights}
+\end{equation}
+은 진폭에 무관한 상수이다. 식 \eqref{eq:compositing}은
+$\Chat_t(q) = \sum_i w_i(q)\,c^t_i$이므로 $c^t_i$에 대해 선형이다. 색이 진폭에 아핀,
+$c^t_i = \gamma_i \amp^t_i + \beta_i$이면
+\[
+  \Chat_t(q) = \sum_i w_i(q)\gamma_i\,\amp^t_i + \sum_i w_i(q)\beta_i
+\]
+이고 첫 항은 진폭에 선형, 둘째 항은 상수이다. 모든 화소에 대해 이 관계를 모으면
+상수항을 흡수한 뒤 $\Chat_t = A_t \amp$의 꼴이 되며, $A_t$의 성분은
+$w_i(q)\gamma_i$로 주어지는 진폭에 무관한 상수이다.
+\end{proof}
+
+명제 \ref{prop:linearity}이 식 \eqref{eq:residual-ls}을 \emph{선형화가 아니라 진짜
+선형} 최소제곱 문제로 만든다. 구현은 이를 활용하여 $A_t$를 희소 행렬로 명시적으로
+추출하고, 매 CG 반복을 전체 렌더링 대신 두 번의 색인 누적으로 수행한다.
+
+\subsection{정칙화 최소제곱의 존재성과 조건수}
+
+\begin{proposition}[존재성, 유일성, 조건수]
+\label{prop:spd}
+$\lambda_a + \lambda_T > 0$이면 식 \eqref{eq:residual-ls}의 목적함수는
+$\Delta \amp_t$에 대한 강볼록 이차식이고, 그 정규방정식은
+\begin{equation}
+  \underbrace{\Bigl(A_t\transp W\transp W A_t + (\lambda_a+\lambda_T)I\Bigr)}_{=:M}
+  \Delta \amp_t
+  = A_t\transp W\transp W\,(y_t - A_t \amp^0) + \lambda_T \Delta \amp_{t-1}
+  \label{eq:normal-equations}
+\end{equation}
+이다. $M$은 대칭 양의 정부호이므로 최소해가 유일하게 존재한다. 나아가 그 조건수는
+\begin{equation}
+  \operatorname{cond}(M)
+  \le \frac{\sigma_{\max}\bigl(A_t\transp W\transp W A_t\bigr) + \lambda_a + \lambda_T}
+           {\lambda_a+\lambda_T}
+  \label{eq:cond-bound}
+\end{equation}
+로 유계이다.
+\end{proposition}
+
+\begin{proof}
+목적함수를 전개하면 이차항은
+$\Delta \amp_t\transp\bigl(A_t\transp W\transp W A_t + (\lambda_a+\lambda_T)I\bigr)\Delta \amp_t$
+이다. $A_t\transp W\transp W A_t = (WA_t)\transp(WA_t)$은 임의의 $v$에 대해
+$v\transp(WA_t)\transp(WA_t)v = \norm{WA_t v}^2 \ge 0$이므로 양의 준정부호이다. 여기에
+$(\lambda_a+\lambda_T)I$를 더하면 임의의 $v\ne0$에 대해
+\[
+  v\transp M v = \norm{WA_t v}^2 + (\lambda_a+\lambda_T)\norm{v}^2
+  \ge (\lambda_a+\lambda_T)\norm{v}^2 > 0,
+\]
+이므로 $M$은 대칭 양의 정부호이다. 강볼록 이차식의 최소는 기울기가 영인 점에서
+유일하게 달성되며, 기울기를 영으로 두면 식 \eqref{eq:normal-equations}을 얻는다.
+
+조건수는 대칭 양정부호 행렬에서
+$\operatorname{cond}(M)=\lambda_{\max}(M)/\lambda_{\min}(M)$이다.
+$A_t\transp W\transp W A_t$의 고윳값이 $[0,\sigma_{\max}]$에 있으므로 $M$의 고윳값은
+$[\lambda_a+\lambda_T,\ \sigma_{\max}+\lambda_a+\lambda_T]$에 있고 식
+\eqref{eq:cond-bound}이 따라온다.
+\end{proof}
+
+$M$이 SPD임은 공액경사법~\citep[제 5장]{nocedal2006_numerical}이 필요로 하는 정확한
+조건이다.
+$\lambda_a+\lambda_T=0$이면 반정부호에 그쳐 CG가 정체한다. 식 \eqref{eq:cond-bound}은
+정칙화가 조건수에서 사는 것과 자료 적합에서 잃는 편향의 교환을 명시한다.
+
+\subsection{저계수 절단 오차}
+
+\begin{proposition}[저계수 절단 오차]
+\label{prop:lowrank}
+전체 잔차 행렬 $\Delta A = [\Delta \amp^t_i] \in \Real^{N\times T}$(행은 surfel, 열은
+프레임)의 특잇값을 $\sigma_1\ge\sigma_2\ge\cdots\ge0$이라 하자. 식 \eqref{eq:lowrank}의
+계수 $r$ 근사에 대하여 최적 근사의 오차는 버려진 특잇값의 꼬리로 \emph{정확히}
+주어진다.
+\begin{equation}
+  \min_{\operatorname{rank}(\Delta A_r)\le r}\norm{\Delta A - \Delta A_r}_F^2
+  = \sum_{\ell>r}\sigma_\ell^2,
+  \qquad
+  \min_{\operatorname{rank}(\Delta A_r)\le r}\norm{\Delta A - \Delta A_r}_2 = \sigma_{r+1}.
+  \label{eq:eckart-young}
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Eckart--Young--Mirsky 정리~\citep{eckart1936_approximation}, 즉 절단 특잇값 분해의
+최적성~\citep[제 2.4절]{golub2013_matrix}에 의해, 특잇값 분해
+$\Delta A = \sum_\ell \sigma_\ell u_\ell v_\ell\transp$에 대하여 계수 $r$ 이하의 모든
+행렬 가운데 Frobenius 및 스펙트럼 노름 오차를 최소화하는 것은 상위 $r$개 특잇삼중항을
+남긴 $\Delta A_r = \sum_{\ell\le r}\sigma_\ell u_\ell v_\ell\transp$이며, 이때 잔차는
+$\sum_{\ell>r}\sigma_\ell u_\ell v_\ell\transp$이다. 특잇벡터들이 정규직교하므로
+Frobenius 노름의 제곱은 특잇값 제곱의 합이 되고, 스펙트럼 노름은 남은 최대 특잇값
+$\sigma_{r+1}$이다.
+\end{proof}
+
+명제 \ref{prop:lowrank}의 실용적 의미는 압축 오차가 \emph{사전에 관측 가능}하다는
+것이다. 잔차 행렬의 특잇값만 계산하면 어떤 계수에서 어떤 오차가 나는지 미리 알 수
+있으므로, 계수를 조정하는 대신 목표 오차로부터 역산할 수 있다.
+
+\caveat{%
+그러나 실제 심장 자료의 잔차장이 얼마나 저계수인지, 즉 특잇값이 실제로 얼마나 빠르게
+감소하는지는 \emph{경험적 질문}이다. 명제 \ref{prop:lowrank}은 오차가 꼬리와 같음을
+말할 뿐 꼬리가 작음을 말하지 않는다. 구현은 단일 숫자가 아니라 전체 스펙트럼을
+보고한다.}
+
+\section{중간 시점 보간의 오차}
+\label{sec:interp-error}
+
+\begin{proposition}[보간된 level-set의 eikonal 위반]
+\label{prop:interp-eikonal}
+$\levt$와 $\lev_{t+1}$이 각각 정확한 부호 거리 함수여서
+$\norm{\nabla\levt}=\norm{\nabla\lev_{t+1}}=1$이라 하자. 그러면 볼록 결합
+\eqref{eq:interpolation}의 경사 제곱 노름은
+\begin{equation}
+  \norm{\nabla\lev_\tau}^2
+  = (1-\beta)^2 + \beta^2 + 2\beta(1-\beta)\bigl(\nabla\levt\cdot\nabla\lev_{t+1}\bigr)
+  \label{eq:interp-grad}
+\end{equation}
+이다. 두 경사 사이의 각을 $\omega$라 하면
+\begin{equation}
+  \norm{\nabla\lev_\tau}^2 = 1 - 2\beta(1-\beta)\bigl(1-\cos\omega\bigr)
+  \label{eq:interp-eikonal}
+\end{equation}
+이고, 따라서 $0<\beta<1$에서 $\norm{\nabla\lev_\tau}=1$은 오직 $\cos\omega=1$, 즉 두
+경사가 정렬될 때에만 성립한다. 그 밖의 경우 $\norm{\nabla\lev_\tau}<1$이므로
+$\lev_\tau$는 부호 거리 함수가 아니다.
+\end{proposition}
+
+\begin{proof}
+경사는 선형 연산자이므로
+$\nabla\lev_\tau = (1-\beta)\nabla\levt + \beta\nabla\lev_{t+1}$이다. 제곱 노름을
+전개하고 $\norm{\nabla\levt}=\norm{\nabla\lev_{t+1}}=1$을 대입하면 식
+\eqref{eq:interp-grad}이다. $\nabla\levt\cdot\nabla\lev_{t+1}=\cos\omega$를 넣고
+$(1-\beta)^2+\beta^2 = 1-2\beta(1-\beta)$를 쓰면
+\[
+  \norm{\nabla\lev_\tau}^2
+  = 1 - 2\beta(1-\beta) + 2\beta(1-\beta)\cos\omega
+  = 1 - 2\beta(1-\beta)(1-\cos\omega).
+\]
+$0<\beta<1$이면 $2\beta(1-\beta)>0$이고 $1-\cos\omega\ge0$이므로
+$\norm{\nabla\lev_\tau}^2\le1$이며, 등호는 $\cos\omega=1$일 때에만 성립한다.
+\end{proof}
+
+\begin{proposition}[보간이 법선 정사영에 주입하는 오차]
+\label{prop:interp-projection}
+보간된 $\lev_\tau$ 위에서 법선 정사영을 수행하면, 명제 \ref{prop:newton-steps}의 1--2회
+수렴을 뒷받침하던 eikonal 가정 $\norm{\nabla\lev_\tau}\approx1$이 명제
+\ref{prop:interp-eikonal}에 의해 깨지므로 추가 오차가 주입된다. 구체적으로 반복
+\eqref{eq:projection-iter}의 분모에 나타나는 $\norm{\gradh\lev_\tau}^2$이 1에서
+$2\beta(1-\beta)(1-\cos\omega)$만큼 벗어나며, 정사영 한 단계에 상대 오차
+\begin{equation}
+  \frac{\bigl\lvert\norm{\nabla\lev_\tau}^2-1\bigr\rvert}{\norm{\nabla\lev_\tau}^2}
+  = \frac{2\beta(1-\beta)(1-\cos\omega)}{1-2\beta(1-\beta)(1-\cos\omega)}
+  \label{eq:interp-projection-error}
+\end{equation}
+를 남긴다. 두 경사가 정렬($\omega=0$)되면 이 오차는 사라지고, $\beta=1/2$과 큰 각
+$\omega$에서 최대가 된다.
+\end{proposition}
+
+\begin{proof}
+정사영의 한 단계는 잔차를 $\gradh\lev_\tau/\norm{\gradh\lev_\tau}^2$ 방향으로
+보정한다. $\lev_\tau$가 부호 거리 함수이면 분모가 1이어서 표준 Newton 단계로
+축약되지만, 명제 \ref{prop:interp-eikonal}에서
+$\norm{\nabla\lev_\tau}^2 = 1-2\beta(1-\beta)(1-\cos\omega)$이므로 분모가 1에서 그만큼
+벗어난다. 보조정리 \ref{lem:quadratic}의 비고가 $\varepsilon$ 정규화에서 분모가
+$\norm{g}^2$에서 $\norm{g}^2+\varepsilon$으로 바뀔 때 상대 편차의 일차 잔차를
+남긴다고 보인 것과 동일한 논법으로, 여기서는 분모의 참값 1 대비 편차가
+$2\beta(1-\beta)(1-\cos\omega)$이므로 상대 오차는 식
+\eqref{eq:interp-projection-error}이다.
+\end{proof}
+
+\caveat{%
+명제 \ref{prop:interp-eikonal}과 \ref{prop:interp-projection}은 선형 보간된
+$\lev_\tau$가 참 중간 표면의 부호 거리 함수가 아니며 그 위에서의 법선 정사영이
+체계적 오차를 가짐을 보인다. 두 프레임 사이 심장 표면의 참 운동은 일반적으로
+강체나 등척이 아니므로 두 경사가 정렬된다는 보장이 없고, 따라서 식
+\eqref{eq:interp-eikonal}의 편차가 실제로 발생한다. 그러므로 중간 시점 보간은
+\textbf{표시 전용} 도구이며, 보간된 표면을 참 중간 해부 구조의 임상적 복원으로
+해석해서는 안 된다.}
+
+\section{프레임 간 오차 전파}
+\label{sec:propagation}
+
+\begin{proposition}[위치 잔차는 누적되지 않고 방향 오차는 표류할 수 있다]
+\label{prop:propagation}
+정준 surfel의 동일성은 프레임을 넘어 유지되지만, 각 프레임에서 anchor는 그 프레임의
+표면 $\surft$ 위로 새로 정사영된다. 따라서 위치 잔차 $\abs{\levt(\anchor^t_i)}$은 매
+프레임 보조정리 \ref{lem:quadratic}의 이차 한계로 다시 억제되어 프레임 수 $T$에
+무관하게 유계이고 \emph{누적되지 않는다}. 반면 접평면 프레임의 방향은 최소 회전
+전송으로 이전 프레임에서 이어받으므로, 각 프레임의 전송 오차가 더해져
+\begin{equation}
+  \Theta_T \le \sum_{t=1}^{T}\theta_t
+  \label{eq:drift}
+\end{equation}
+의 방향 오차 표류를 일으킬 수 있다. 여기서 $\theta_t$는 프레임 $t$의 전송 각오차이다.
+\end{proposition}
+
+\begin{proof}
+위치에 대해서는, 각 프레임에서 반복 정사영이 잔차를 보조정리 \ref{lem:quadratic}의
+한계로 억제하며, 이 억제는 이전 프레임의 결과와 무관하게 그 프레임의 표면만으로
+결정된다. 곧 정사영은 매 프레임 위치 오차를 \emph{재설정}하므로 누적이 없고 상한은
+$T$에 무관하다. 방향에 대해서는, 전송이 $e^t_{i,1}$을 $e^{t-1}_{i,1}$로부터 계산하므로
+프레임 $t$의 오차 $\theta_t$가 이전 프레임의 방향 위에 더해진다. 합성 회전의 각은
+삼각부등식으로 각의 합을 넘지 않으므로 누적 방향 오차는 식 \eqref{eq:drift}로
+상한지어지며, 이는 위치와 달리 재설정되지 않고 표류할 수 있다.
+\end{proof}
+
+명제 \ref{prop:propagation}은 두 가지 실용적 함의를 가진다. 첫째, 위치 정확도는 긴
+시퀀스에서도 안전하다. 둘째, 방향은 그렇지 않으므로 등방 원반(명제 \ref{prop:gauge})이
+긴 시퀀스에서 구조적 이점을 가진다. 면내 방향 표류가 렌더링에 무해하기 때문이다.
+
+\section{오차 결과와 검증 지표의 대응}
+\label{sec:error-to-metric}
+
+표 \ref{tab:error-metric}은 본 장의 각 결과를 제 \ref{ch:protocol}장의 측정 지표에
+대응시킨다. 이 대응이 오차 분석을 검증 가능하게 만드는 연결고리이다.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{오차 분석 결과와 검증 지표의 대응. ``측정 상태'' 열은 본 논문 작성 시점의
+실제 상태이다.}
+\label{tab:error-metric}
+\begin{tabular}{@{}p{4.4cm}p{4.6cm}p{3.4cm}@{}}
+\toprule
+이론 결과 & 대응 지표 & 측정 상태 \\
+\midrule
+명제 \ref{prop:normal-error}: $\sin\theta=O(\hmax^2)$
+  & normal angular error, $\spacing$ 스윕에서의 기울기
+  & \NM \\
+보조정리 \ref{lem:quadratic}: 이차 잔차 수축
+  & $\Esurf$ 식 \eqref{eq:e-surf}, 반복별 잔차 이력
+  & \NM \\
+보조정리 \ref{lem:transport-orthonormal}: 정규직교성
+  & 프레임 직교성 잔차
+  & \NM \\
+명제 \ref{prop:gauge}: 등방 gauge 불변
+  & 면내 회전 전후 렌더링 차이
+  & \NM \\
+명제 \ref{prop:degeneracy}: $\norm{\bar e}=\abs{\sin\psi}$
+  & 전송 퇴화 빈도, $\Eflicker$
+  & \NM \\
+명제 \ref{prop:ray-plane}: 조건수 $1/c_0$
+  & depth RMSE, 컷오프 $c_0$ 스윕
+  & \NM \\
+명제 \ref{prop:planar-disk}: $O(\kappa s^2)$
+  & silhouette IoU, $\Esurf$
+  & \NM \\
+명제 \ref{prop:perspective}: 아핀 오차 $\propto \Delta z/z$
+  & 2DGS 대 thin-3DGS depth RMSE (RQ6)
+  & \NM \\
+명제 \ref{prop:spd}: SPD와 식 \eqref{eq:cond-bound}
+  & CG 반복 횟수, 조건수 상계
+  & \NM \\
+명제 \ref{prop:lowrank}: 특잇값 꼬리
+  & 저계수 복원 오차, 스펙트럼
+  & \textbf{검증됨}\footnotemark[1] \\
+명제 \ref{prop:interp-eikonal}: 식 \eqref{eq:interp-eikonal}
+  & 측정 eikonal 노름 대 예측값
+  & \NM \\
+명제 \ref{prop:propagation}: 식 \eqref{eq:drift}
+  & 프레임별 $\Esurf$, 누적 회전각
+  & \NM \\
+\bottomrule
+\end{tabular}
+\footnotetext[1]{명제 \ref{prop:lowrank}의 Eckart--Young 항등식은 제
+\ref{sec:kernel-verification}절에서 PyTorch 없이 독립 검증되었다. 다만 실제 심장
+잔차장의 특잇값 감쇠 속도는 여전히 미측정이다.}
+\end{table}

@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cvdyn2dgs"
+version = "0.1.0"
+description = "CV-Dyn2DGS: Chan-Vese-guided dynamic 2D Gaussian surfels for real-time cardiac surface visualization"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Sukhun Yang" }]
+dependencies = [
+    "torch>=2.1",
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+# Real cine-CMR datasets (ACDC / M&Ms-2) are distributed as NIfTI.
+data = ["nibabel>=5.1"]
+# Figure generation for the experiment reports.
+plot = ["matplotlib>=3.7"]
+# Hausdorff / EDT reference implementations used only in cross-checks.
+ref = ["scipy>=1.10"]
+dev = ["pytest>=7.4", "pytest-xdist>=3.3"]
+
+[project.scripts]
+cvdyn2dgs = "cvdyn2dgs.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cvdyn2dgs*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["error::RuntimeWarning"]

@@ -1,0 +1,7 @@
+# Third-party clones live here and are NEVER committed.
+#
+# Four of the pinned targets are not redistributable (two have no licence file at
+# all, two are under the Inria/MPII research-only licence). This ignore rule is the
+# mechanical guard: even `git add -A` cannot pull them in.
+*
+!.gitignore
