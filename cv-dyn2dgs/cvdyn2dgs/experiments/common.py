@@ -129,8 +129,17 @@ def run_pipeline_on_phantom(
     cameras: EvalCameras | None = None,
     generator: torch.Generator | None = None,
     verbose: bool = False,
+    oracle_surface: bool = False,
 ) -> tuple[PrecomputedModel, EvalCameras, StageTimer]:
-    """Precompute a model on a phantom sequence, initialised from the ED label."""
+    """Precompute a model on a phantom sequence, initialised from the ED label.
+
+    ``oracle_surface`` replaces the Chan-Vese level sets with the phantom's **exact analytic**
+    signed distance functions, leaving every other stage untouched.  This is the layer-1
+    upper bound and it is not optional for attribution: without it, segmentation error and
+    representation error are confounded, and no RQ5/RQ6 number can be assigned to either.
+    The phantom is the only source where it is available exactly - real data has labels at
+    ED and ES only.
+    """
     device = phantom.images[0].device
     dtype = phantom.images[0].dtype
     cams = cameras or make_eval_cameras(phantom.grid, device=device, dtype=dtype)
@@ -153,8 +162,13 @@ def run_pipeline_on_phantom(
         cameras=cams.fit,
         timer=timer,
         verbose=verbose,
+        phis_override=(
+            [phantom.phi_gt[t].to(device=device, dtype=dtype) for t in order]
+            if oracle_surface else None
+        ),
     )
     model.canonical_stats["frame_order_start"] = float(ed)
+    model.canonical_stats["oracle_surface"] = float(oracle_surface)
     return model, cams, timer
 
 
@@ -462,6 +476,43 @@ def cost_quality_comparison(results: Sequence["EvaluationResult"]) -> dict[str, 
     }
 
 
+def _require_runnable(spec: BaselineSpec) -> None:
+    """Refuse to evaluate a baseline this runner cannot honestly realise.
+
+    Six baselines declare an axis that :func:`run_pipeline_on_phantom` does not implement:
+    the layer-1 specs carry a ``surface_source`` and the layer-2 free-geometry specs need a
+    model whose geometry is optimised rather than pinned.  Running them through the standard
+    surfel pipeline would silently produce ordinary ``cv-dyn2dgs`` numbers **labelled** as
+    something else, which is worse than not running them at all - a reader would take the
+    oracle row as an oracle result.
+
+    ``source-oracle`` is the exception: on the phantom an exact analytic level set exists,
+    so it is genuinely realisable and is wired up below.
+    """
+    src = spec.extra.get("surface_source")
+    if src in ("mask",):
+        raise NotImplementedError(
+            f"baseline {spec.name!r} needs an external segmentation as its surface source. "
+            f"Supply one via levelset.surface_source.MaskSequenceSource; there is nothing "
+            f"to derive it from on the phantom. Reported as not measured rather than run "
+            f"with the Chan-Vese surface under a misleading name."
+        )
+    if spec.extra.get("spacing_aware") is False:
+        raise NotImplementedError(
+            f"baseline {spec.name!r} varies spacing_aware, which this runner does not "
+            f"thread through precompute yet. Note also that the ablation is vacuous on an "
+            f"isotropic phantom - run it on anisotropic data or with a phantom whose "
+            f"spacing ratio is set deliberately."
+        )
+    if spec.renderer == "free3dgs":
+        raise NotImplementedError(
+            f"baseline {spec.name!r} optimises its own geometry, so it needs "
+            f"surfel.free3dgs.fit_free_3dgs rather than the surfel precompute path. "
+            f"evaluate_all() would otherwise score a surface-pinned model under the "
+            f"free-geometry name and invert the comparison this baseline exists for."
+        )
+
+
 def evaluate_all(
     spec: BaselineSpec,
     phantom: Phantom4D,
@@ -471,9 +522,18 @@ def evaluate_all(
     eval_frames: Sequence[int] | None = None,
     verbose: bool = False,
 ) -> EvaluationResult:
-    """Run one baseline end-to-end on a phantom and evaluate everything."""
+    """Run one baseline end-to-end on a phantom and evaluate everything.
+
+    Raises :class:`NotImplementedError` for baselines whose distinguishing axis this runner
+    cannot realise - see :func:`_require_runnable`.  That is deliberate: a mislabelled row
+    is worse than an absent one.
+    """
+    _require_runnable(spec)
+
+    oracle = spec.extra.get("surface_source") == "oracle"
     model, cams, _ = run_pipeline_on_phantom(
-        phantom, spec.config, cameras=cameras, generator=generator, verbose=verbose
+        phantom, spec.config, cameras=cameras, generator=generator, verbose=verbose,
+        oracle_surface=oracle,
     )
 
     ed = phantom.ed_index()

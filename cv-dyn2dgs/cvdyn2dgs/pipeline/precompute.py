@@ -322,6 +322,7 @@ def precompute(
     cameras: Sequence[Camera] | None = None,
     timer: StageTimer | None = None,
     verbose: bool = False,
+    phis_override: Sequence[Tensor] | None = None,
 ) -> PrecomputedModel:
     """Run the full precomputation for one patient.
 
@@ -334,6 +335,13 @@ def precompute(
         :func:`cvdyn2dgs.levelset.sdf.signed_distance_from_mask`, or an interior seed).
     cameras:
         Supervision views; defaults to :func:`make_supervision_cameras`.
+    phis_override:
+        Use these level sets instead of solving Chan-Vese. One per frame, same order as
+        ``images``. This exists for the layer-1 *oracle* comparison: substituting an exact
+        surface while leaving every other stage untouched is the only way to separate
+        segmentation error from representation error. Chan-Vese timings are recorded as
+        zero and ``cv_iterations`` as zero, so an oracle run can never be mistaken for a
+        measurement of the solver.
 
     Returns
     -------
@@ -341,28 +349,38 @@ def precompute(
     """
     if len(images) == 0:
         raise ValueError("need at least one frame")
+    if phis_override is not None and len(phis_override) != len(images):
+        raise ValueError(
+            f"phis_override has {len(phis_override)} level sets for {len(images)} frames"
+        )
     device = images[0].device
     timer = timer or StageTimer(device=device)
     cams = list(cameras) if cameras is not None else make_supervision_cameras(
         grid, device=device, dtype=images[0].dtype
     )
 
-    # ---- step 1: frame-0 Chan-Vese ---------------------------------------
-    with timer.stage("cv"):
-        cv0 = solve_frame(
-            images[0],
-            phi0_init,
-            grid,
-            cfg.chanvese,
-            max_iters=int(cfg.chanvese.max_iters * cfg.chanvese.frame0_iters_scale),
+    # ---- step 1: frame-0 surface ------------------------------------------
+    if phis_override is not None:
+        # Oracle surface: no solve, and the solver metrics stay zero so this run cannot be
+        # read as evidence about Chan-Vese convergence.
+        phi0 = phis_override[0].clone()
+        rec0 = FrameRecord(frame=0, cv_iterations=0, cv_time_ms=0.0, cv_converged=True)
+    else:
+        with timer.stage("cv"):
+            cv0 = solve_frame(
+                images[0],
+                phi0_init,
+                grid,
+                cfg.chanvese,
+                max_iters=int(cfg.chanvese.max_iters * cfg.chanvese.frame0_iters_scale),
+            )
+        rec0 = FrameRecord(
+            frame=0,
+            cv_iterations=cv0.iterations,
+            cv_time_ms=timer.samples["cv"][-1],
+            cv_converged=cv0.converged,
         )
-    rec0 = FrameRecord(
-        frame=0,
-        cv_iterations=cv0.iterations,
-        cv_time_ms=timer.samples["cv"][-1],
-        cv_converged=cv0.converged,
-    )
-    phi0 = cv0.phi
+        phi0 = cv0.phi
     grad0 = gradient_central(phi0, grid.spacing)
 
     # ---- step 2: canonical surfels ---------------------------------------
@@ -394,17 +412,23 @@ def precompute(
     for t in range(1, len(images)):
         rec = FrameRecord(frame=t, cv_iterations=0, cv_time_ms=0.0, cv_converged=False)
 
-        with timer.stage("cv"):
-            cv = solve_frame(
-                images[t],
-                phis[-1] if cfg.chanvese.warm_start else phi0_init,
-                grid,
-                cfg.chanvese,
-            )
-        rec.cv_iterations = cv.iterations
-        rec.cv_time_ms = timer.samples["cv"][-1]
-        rec.cv_converged = cv.converged
-        phi_t = cv.phi
+        if phis_override is not None:
+            phi_t = phis_override[t].clone()
+            rec.cv_iterations = 0
+            rec.cv_time_ms = 0.0
+            rec.cv_converged = True
+        else:
+            with timer.stage("cv"):
+                cv = solve_frame(
+                    images[t],
+                    phis[-1] if cfg.chanvese.warm_start else phi0_init,
+                    grid,
+                    cfg.chanvese,
+                )
+            rec.cv_iterations = cv.iterations
+            rec.cv_time_ms = timer.samples["cv"][-1]
+            rec.cv_converged = cv.converged
+            phi_t = cv.phi
         grad_t = gradient_central(phi_t, grid.spacing)
 
         _update_geometry(surfels, phi_t, grid, cfg, grad_t, timer, rec)

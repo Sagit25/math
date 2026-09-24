@@ -22,7 +22,7 @@ from ..baselines import DYNA3DGR_COMPARISON, get_baseline, list_baselines
 from ..core.runtime import append_csv, describe_environment, resolve_device, save_json, seed_everything
 from ..data.phantom import Phantom4D, PhantomConfig, make_phantom
 from .ablations import run_all_ablations, spacing_ablation
-from .common import evaluate_all, make_eval_cameras
+from .common import cost_quality_comparison, evaluate_all, make_eval_cameras
 from .research_questions import (
     progressive_development,
     rq1_warm_start,
@@ -131,12 +131,24 @@ def run_everything(
             "param-copy",
             "closest-point",
             "normal-no-residual",
+            # Layer-1 oracle: the exact analytic surface. Not optional for attribution -
+            # without it, segmentation error and representation error are confounded and
+            # no RQ5/RQ6 number can be assigned to either. Only the phantom supplies it
+            # exactly; on real data labels exist at ED and ES only.
+            "source-oracle",
+            # These declare an axis this runner cannot realise on a phantom, so they raise
+            # and are recorded as errors rather than silently producing cv-dyn2dgs numbers
+            # under another name. Listing them keeps the gap visible in baselines.json.
+            "source-mask",
+            "free-3dgs-surface",
+            "gaussian-surfel-exact",
         ]
         if verbose:
             print(f"\n=== baselines: {names} ===")
         cams = make_eval_cameras(ph.grid, device=dev)
         rows: list[dict[str, object]] = []
         details: dict[str, object] = {}
+        evaluated: dict[str, object] = {}
         for name in names:
             if verbose:
                 print(f"--- {name}")
@@ -145,15 +157,38 @@ def run_everything(
                 res = evaluate_all(spec, ph, cameras=cams, generator=gen, verbose=False)
                 row = res.headline()
                 details[name] = res.flat()
+                evaluated[name] = res
+            except NotImplementedError as exc:
+                # Declared but not realisable here. Distinguished from a crash on purpose:
+                # this is a known gap in the runner, not a bug in the method.
+                row = {"name": name, "not_measured": str(exc)}
+                details[name] = row
+                evaluated[name] = None
+                if verbose:
+                    print(f"    NOT MEASURED: {exc}")
             except Exception as exc:  # noqa: BLE001
                 row = {"name": name, "error": f"{type(exc).__name__}: {exc}"}
                 details[name] = row
+                evaluated[name] = None
             rows.append(row)
             append_csv(out / "baselines.csv", row, columns=_HEADLINE_COLUMNS)
             if verbose:
                 print(f"    {row}")
         results["baselines"] = rows
         save_json(out / "baselines.json", {"headline": rows, "detail": details})
+
+        # Quality against cost, with the two cost currencies kept apart and the dominance
+        # verdict. Only baselines that actually produced an EvaluationResult take part; a
+        # baseline that raised has nothing to place on the frontier.
+        ok = [r for n, r in evaluated.items() if r is not None]
+        if ok:
+            cq = cost_quality_comparison(ok)
+            save_json(out / "cost_quality.json", cq)
+            results["cost_quality"] = cq
+            if verbose:
+                print(f"\n=== cost/quality frontier: {cq['frontier']} ===")
+                if cq["dominated"]:
+                    print(f"    dominated: {cq['dominated']}")
 
     # ---- 3. research questions -------------------------------------------
     rq_fns = {
