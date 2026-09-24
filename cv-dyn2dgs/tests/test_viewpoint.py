@@ -25,24 +25,34 @@ from __future__ import annotations
 import importlib.util
 import math
 import sys
-import types
 from pathlib import Path
 
 import pytest
 
 
 def _load_viewpoint():
-    """Import ``metrics/viewpoint.py`` in isolation, without executing any package init."""
+    """Load the module by path, WITHOUT registering anything under ``cvdyn2dgs``.
+
+    An earlier version of this helper installed stub ``cvdyn2dgs`` and
+    ``cvdyn2dgs.metrics`` entries in ``sys.modules`` so that the relative-import
+    machinery would be satisfied.  Those stubs had an empty ``__path__``, and because
+    pytest collects the whole ``tests/`` directory in alphabetical order they were still
+    in ``sys.modules`` when the other test modules were imported - so
+    ``cvdyn2dgs.metrics.clinical`` became unfindable and an unrelated test file failed to
+    collect.  The symptom looked like a broken editable install and was not.
+
+    No stubs are needed: ``metrics/viewpoint.py`` has no runtime relative imports (its only one is under
+    ``TYPE_CHECKING``), so it loads standalone under a private name that cannot collide
+    with the real package.
+    """
     root = Path(__file__).resolve().parent.parent
     path = root / "cvdyn2dgs" / "metrics" / "viewpoint.py"
-    for name in ("cvdyn2dgs", "cvdyn2dgs.metrics"):
-        if name not in sys.modules:
-            stub = types.ModuleType(name)
-            stub.__path__ = []  # type: ignore[attr-defined]
-            sys.modules[name] = stub
-    spec = importlib.util.spec_from_file_location("cvdyn2dgs.metrics.viewpoint", path)
+    spec = importlib.util.spec_from_file_location("_cvdyn2dgs_viewpoint_standalone", path)
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)
+    # Registration IS required - @dataclass resolves sys.modules[cls.__module__] while
+    # processing annotations - but under the private name above, which cannot shadow the
+    # real package the way the old `cvdyn2dgs.metrics` stub did.
     sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
     return mod

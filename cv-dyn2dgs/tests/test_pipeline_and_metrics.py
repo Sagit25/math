@@ -9,6 +9,7 @@ that the quality is good. Quality lives in :mod:`cvdyn2dgs.experiments`.
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 import pytest
 import torch
@@ -108,15 +109,52 @@ def test_reinitialisation_improves_the_eikonal_property():
     assert float(((after_phi > 0) != (phi > 0)).to(torch.float32).mean()) < 0.02
 
 
-def test_chanvese_tracks_the_moving_surface():
-    ph = make_phantom(TINY)
+def _track_dices(cfg_phantom: PhantomConfig) -> list[float]:
+    ph = make_phantom(cfg_phantom)
     cfg = ChanVeseConfig(max_iters=120, check_every=5, narrow_band_mm=8.0)
     phi0 = signed_distance_from_mask(ph.masks[0], ph.grid.spacing, max_dist_mm=12.0)
-
     seq = solve_sequence(ph.images, phi0, ph.grid, cfg)
     assert len(seq.phis) == ph.n_frames
-    dices = [dice(p > 0, m) for p, m in zip(seq.phis, ph.masks)]
-    assert min(dices) > 0.75, f"Chan-Vese lost the surface: {dices}"
+    return [dice(p > 0, m) for p, m in zip(seq.phis, ph.masks)]
+
+
+def test_chanvese_tracks_the_moving_surface_when_intensity_is_piecewise_constant():
+    """Tracking, measured where Chan-Vese's own assumption holds.
+
+    The original version of this test ran on the phantom WITH a papillary muscle and
+    demanded Dice > 0.75. It failed at 0.48 - and the failure was not a tracking bug. Dice
+    was already 0.72 on frame 0, which is initialised from the ground-truth mask itself, so
+    the surface was being lost by the segmentation rather than by the frame-to-frame update.
+    The cause is that the phantom includes a papillary muscle *specifically to violate* the
+    piecewise-constant intensity assumption Chan-Vese rests on (proposal §2.5, §10.3): the
+    region term excludes the bright muscle from the interior, and the ground-truth cavity
+    mask includes it - phantom.py's own docstring for the mask builder says
+    "papillary muscle counted as blood pool", which is the whole mismatch.
+
+    Raising the threshold would have hidden that; removing the confound measures the thing
+    the test is named after. The limitation itself is measured by the test below.
+    """
+    clean = replace(TINY, papillary=False, n_papillary=0)
+    dices = _track_dices(clean)
+    assert min(dices) > 0.75, f"Chan-Vese lost a piecewise-constant surface: {dices}"
+
+
+def test_papillary_muscle_degrades_chanvese_as_documented():
+    """The documented limitation, measured rather than asserted.
+
+    This is deliberately *not* a quality floor. It checks the direction and that frame 0
+    already shows the effect - which is what distinguishes a violated intensity assumption
+    from a failure of the temporal update. If this ever passes because both configurations
+    score the same, the phantom has stopped exercising the limitation and §10.3's first
+    limitation is no longer supported by anything.
+    """
+    clean = min(_track_dices(replace(TINY, papillary=False, n_papillary=0)))
+    with_muscle = min(_track_dices(replace(TINY, papillary=True, n_papillary=1)))
+    assert with_muscle < clean, (
+        f"the papillary muscle did not degrade segmentation "
+        f"(clean {clean:.3f} vs muscle {with_muscle:.3f}); the phantom is no longer "
+        f"violating the piecewise-constant assumption it exists to violate"
+    )
 
 
 def test_warm_start_uses_no_more_iterations_than_cold():

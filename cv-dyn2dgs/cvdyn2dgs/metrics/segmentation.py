@@ -91,11 +91,24 @@ def surface_distances(
     """
     if points_a.numel() == 0 or points_b.numel() == 0:
         return torch.full((max(1, points_a.shape[0]),), float("nan"), device=points_a.device)
-    out = torch.empty((points_a.shape[0],), device=points_a.device, dtype=points_a.dtype)
+
+    # cdist defaults to the expansion |a|^2 + |b|^2 - 2a.b, which is fast but cancels
+    # catastrophically when the distance is small relative to the coordinates. World
+    # coordinates here are tens of millimetres, so in float32 an exactly-zero distance came
+    # out as ~7e-4 mm - a self-comparison of identical surfaces reported a non-zero HD95.
+    # The error is far below one voxel and so harmless for a real comparison, but it is a
+    # floor under every reported sub-millimetre distance, and a metric that cannot return 0
+    # for identical inputs cannot be trusted at the resolution this thesis quotes.
+    # float64 plus the direct form removes it. Cardiac surfaces are O(10^4) points, so the
+    # extra cost is irrelevant next to the rest of the pipeline.
+    a64 = points_a.to(torch.float64)
+    b64 = points_b.to(torch.float64)
+    out = torch.empty((points_a.shape[0],), device=points_a.device, dtype=torch.float64)
     for lo in range(0, points_a.shape[0], chunk):
         hi = min(lo + chunk, points_a.shape[0])
-        out[lo:hi] = torch.cdist(points_a[lo:hi], points_b).min(dim=1).values
-    return out
+        d = torch.cdist(a64[lo:hi], b64, compute_mode="donot_use_mm_for_euclid_dist")
+        out[lo:hi] = d.min(dim=1).values
+    return out.to(points_a.dtype)
 
 
 @dataclass
