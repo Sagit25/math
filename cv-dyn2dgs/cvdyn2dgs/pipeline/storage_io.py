@@ -113,13 +113,16 @@ def pack_narrow_band(phi: Tensor, band_mm: float, *, fill_outside: float | None 
 
     idx = torch.nonzero(band, as_tuple=False)
     if idx.numel() == 0:
+        # device-ok: the empty-band early return builds a record for SERIALISATION, which
+        # is a CPU byte-level operation throughout (see _pack_bits below).
         lo = torch.zeros(3, dtype=torch.int32)
-        shape = torch.zeros(3, dtype=torch.int32)
+        shape = torch.zeros(3, dtype=torch.int32)  # device-ok: as above
         return PackedBand(
             bbox_lo=lo,
             bbox_shape=shape,
+            # device-ok: empty buffers destined for a file, never used in arithmetic.
             bitmask=torch.zeros(0, dtype=torch.uint8),
-            values=torch.zeros(0, dtype=torch.float32),
+            values=torch.zeros(0, dtype=torch.float32),  # device-ok: as above
             fill_outside=float(band_mm) if fill_outside is None else float(fill_outside),
             sign_mask=_pack_bits((phi > 0).reshape(-1).cpu()),
         )

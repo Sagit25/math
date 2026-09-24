@@ -157,9 +157,12 @@ def load_nifti(path: str | Path) -> tuple[Tensor, Grid, Tensor]:
     nib = _require_nibabel()
     img = nib.load(str(path))
     arr = img.get_fdata(dtype="float32")
+    # device-ok: NIfTI is read on the CPU; load_acdc_patient/load_mnms2_patient move the
+    # volumes and masks with .to(device), and CineSequence.to() moves the affine.
     data = torch.from_numpy(arr)
     zooms = img.header.get_zooms()[:3]
     grid = Grid(shape=tuple(int(s) for s in data.shape[:3]), spacing=tuple(float(z) for z in zooms))
+    # device-ok: as above - moved by CineSequence.to().
     affine = torch.from_numpy(img.affine.astype("float32"))
     return data, grid, affine
 

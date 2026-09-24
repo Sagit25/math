@@ -651,7 +651,12 @@ def run_smoke(*, full: bool = False, device: str = "auto", seed: int = 0, verbos
         cfg.chanvese.max_iters = 35
         cfg.residual.cg_iters = 6
 
-        cams = make_eval_cameras(ph.grid, n_orbit=2, resolution=48)
+        # device/dtype must be passed: make_eval_cameras defaults to the CPU, and the
+        # phantom lives on the resolved device, so omitting them produced CPU cameras
+        # against CUDA volumes - the device mismatch seen on the first GPU run.
+        cams = make_eval_cameras(
+            ph.grid, n_orbit=2, resolution=48, device=S["dev"], dtype=S["dtype"]
+        )
         model, cams, _ = run_pipeline_on_phantom(ph, cfg, cameras=cams, generator=S["gen"])
         S["model"] = model
         S["cams"] = cams

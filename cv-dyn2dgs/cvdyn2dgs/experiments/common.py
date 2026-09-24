@@ -144,6 +144,21 @@ def run_pipeline_on_phantom(
     dtype = phantom.images[0].dtype
     cams = cameras or make_eval_cameras(phantom.grid, device=device, dtype=dtype)
 
+    # make_eval_cameras() defaults to device=None, i.e. the CPU, so a caller that builds
+    # cameras separately and forgets to pass the device hands us CPU cameras for a CUDA
+    # phantom. That surfaces much later as an opaque "expected all tensors to be on the
+    # same device" from inside the rasteriser. Checking here turns it into a message that
+    # names the cause.
+    for label, cam_list in (("fit", cams.fit), ("eval", cams.eval)):
+        for i, cam in enumerate(cam_list):
+            if cam.R.device != device:
+                raise ValueError(
+                    f"camera {label}[{i}] is on {cam.R.device} but the phantom is on "
+                    f"{device}. Pass device= to make_eval_cameras(); it defaults to the "
+                    f"CPU, and mixing the two fails deep inside the rasteriser with no "
+                    f"indication of where the mismatch came from."
+                )
+
     ed = phantom.ed_index()
     phi0 = initial_levelset_from_mask(phantom.masks[ed], phantom.grid)
     phi0 = phi0.to(device=device, dtype=dtype)

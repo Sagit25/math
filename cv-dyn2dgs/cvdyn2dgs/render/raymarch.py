@@ -157,6 +157,7 @@ def raymarch_levelset(
     origins_all, dirs_all = camera.rays()
     per_pixel_origin = origins_all.shape[0] != 1
 
+    # device-ok: reduced to a Python float on the same line; never meets another tensor.
     diag = float(torch.tensor(grid.extent_mm).norm().item())
     n_steps = max(2, int(math.ceil(diag / float(step_mm))))
 

@@ -144,6 +144,10 @@ fi
 run_stage "torch-free unit tests"      0 "$PY" -m pytest -q \
     tests/test_viewpoint.py tests/test_costquality.py
 
+# Device safety, before any GPU work. Three GPU-only failures have been traced to a tensor
+# built without a device; this is cheaper than finding the fourth at runtime.
+run_stage "device audit"               0 "$PY" scripts/audit_devices.py --strict
+
 # 1) The single most informative stage. 25 independent checks, dependency-ordered, one run
 #    reports every failure instead of stopping at the first.
 run_stage "smoke (staged diagnostic)"  1 "$PY" -m cvdyn2dgs.smoke --full

@@ -203,8 +203,15 @@ class ExternalOutput:
         return out
 
 
-def _load_series(root: Path, name: str, n_expected: int) -> list[Tensor] | None:
-    """Load ``<root>/<name>/frame_*.npy`` as tensors, or ``None`` if absent."""
+def _load_series(
+    root: Path, name: str, n_expected: int, *, device=None
+) -> list[Tensor] | None:
+    """Load ``<root>/<name>/frame_*.npy`` as tensors, or ``None`` if absent.
+
+    ``device`` matters: these arrays are scored against a ray-marched reference that lives
+    on the compute device, and ``torch.from_numpy`` always produces a CPU tensor. Leaving
+    them on the CPU fails at the first comparison.
+    """
     d = root / name
     if not d.is_dir():
         return None
@@ -215,7 +222,7 @@ def _load_series(root: Path, name: str, n_expected: int) -> list[Tensor] | None:
         import numpy as np
     except ImportError as exc:  # pragma: no cover - numpy is a hard dependency
         raise ImportError("loading external output needs numpy") from exc
-    out = [torch.from_numpy(np.load(str(f))) for f in files]
+    out = [torch.from_numpy(np.load(str(f))).to(device) for f in files]
     if len(out) != n_expected:
         raise ValueError(
             f"{d}: found {len(out)} frames but meta.json declares {n_expected}. "
@@ -225,8 +232,14 @@ def _load_series(root: Path, name: str, n_expected: int) -> list[Tensor] | None:
     return out
 
 
-def load_external(root: str | Path, *, manifest_commit: str | None = None) -> ExternalOutput:
-    """Load one method's dumped views from ``root``."""
+def load_external(
+    root: str | Path, *, manifest_commit: str | None = None, device=None
+) -> ExternalOutput:
+    """Load one method's dumped views from ``root``.
+
+    ``device`` should be the device the reference renderings are on; see
+    :func:`_load_series`.
+    """
     root = Path(root)
     meta_path = root / "meta.json"
     if not meta_path.exists():
@@ -235,15 +248,15 @@ def load_external(root: str | Path, *, manifest_commit: str | None = None) -> Ex
             f"expected layout and a meta.json skeleton."
         )
     meta = ExternalMeta.from_json(meta_path)
-    color = _load_series(root, "color", meta.n_frames)
+    color = _load_series(root, "color", meta.n_frames, device=device)
     if color is None:
         raise ValueError(f"{root}/color/ is required and was not found")
     out = ExternalOutput(
         meta=meta,
         color=color,
-        alpha=_load_series(root, "alpha", meta.n_frames),
-        depth=_load_series(root, "depth", meta.n_frames),
-        normal=_load_series(root, "normal", meta.n_frames),
+        alpha=_load_series(root, "alpha", meta.n_frames, device=device),
+        depth=_load_series(root, "depth", meta.n_frames, device=device),
+        normal=_load_series(root, "normal", meta.n_frames, device=device),
         root=root,
     )
     for i, c in enumerate(out.color):

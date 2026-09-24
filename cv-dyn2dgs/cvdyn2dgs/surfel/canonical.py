@@ -75,12 +75,15 @@ def sample_mesh_surface(
 
     # seed_everything() returns a CPU generator, so these draws are CPU by necessity and
     # every derived tensor is moved to the mesh's device explicitly below.
+    # device-ok: seed_everything() returns a CPU generator, so these draws MUST be on the
+    # CPU; face_idx and the barycentric weights below are each moved to the mesh device.
     u = torch.rand(n_points, generator=generator, dtype=torch.float64)
     face_idx = torch.searchsorted(cdf, u.clamp(max=1.0 - 1e-9)).clamp(max=mesh.n_faces - 1)
     face_idx = face_idx.to(mesh.faces.device)
 
+    # device-ok: as above; b0/b1/b2 are moved to mesh.vertices.device.
     r1 = torch.rand(n_points, generator=generator, dtype=torch.float64)
-    r2 = torch.rand(n_points, generator=generator, dtype=torch.float64)
+    r2 = torch.rand(n_points, generator=generator, dtype=torch.float64)  # device-ok: as r1
     su = torch.sqrt(r1)
     b0 = (1.0 - su).to(mesh.vertices.dtype).to(mesh.vertices.device)
     b1 = (su * (1.0 - r2)).to(mesh.vertices.dtype).to(mesh.vertices.device)

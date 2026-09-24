@@ -217,7 +217,11 @@ def coverage_report(
     spill = float(((~tgt) & covered).sum().item())
     over = float((covered & (n_contributing > int(overlap_k))).sum().item())
 
-    contrib = n_contributing[covered].to(torch.float32) if n_cov > 0 else torch.zeros(1)
+    contrib = (
+        n_contributing[covered].to(torch.float32)
+        if n_cov > 0
+        else torch.zeros(1, device=n_contributing.device)
+    )
     return CoverageReport(
         hole_fraction=holes / max(n_tgt, 1.0),
         spill_fraction=spill / max(n_tgt, 1.0),
