@@ -115,8 +115,17 @@ def spectrum_report(delta: Tensor | list[Tensor]) -> dict[str, float | list[floa
         "singular_values": [float(v) for v in sv],
         "energy_fraction": [float(v) for v in cum],
         "total_frobenius": float(torch.sqrt((sv * sv).sum()).item()),
-        "effective_rank_99": int(torch.searchsorted(cum, torch.tensor(0.99, dtype=cum.dtype)).item()) + 1,
-        "effective_rank_999": int(torch.searchsorted(cum, torch.tensor(0.999, dtype=cum.dtype)).item()) + 1,
+        # The threshold must live on the same device as cum, or searchsorted raises on GPU.
+        "effective_rank_99": int(
+            torch.searchsorted(
+                cum, torch.tensor(0.99, dtype=cum.dtype, device=cum.device)
+            ).item()
+        ) + 1,
+        "effective_rank_999": int(
+            torch.searchsorted(
+                cum, torch.tensor(0.999, dtype=cum.dtype, device=cum.device)
+            ).item()
+        ) + 1,
     }
 
 

@@ -73,6 +73,8 @@ def sample_mesh_surface(
     cdf = torch.cumsum(areas.detach().to("cpu", torch.float64), dim=0)
     cdf = cdf / cdf[-1].clamp_min(1e-30)
 
+    # seed_everything() returns a CPU generator, so these draws are CPU by necessity and
+    # every derived tensor is moved to the mesh's device explicitly below.
     u = torch.rand(n_points, generator=generator, dtype=torch.float64)
     face_idx = torch.searchsorted(cdf, u.clamp(max=1.0 - 1e-9)).clamp(max=mesh.n_faces - 1)
     face_idx = face_idx.to(mesh.faces.device)

@@ -488,7 +488,10 @@ def check_perspective_vs_affine() -> CheckResult:
         if int(both.sum().item()) == 0:
             results[f"{label}/depth_gap_mm"] = float("nan")
             continue
-        gap = (out2d.depth - out3d.depth)[both].abs().mean()
+        # The two renderers accumulate different alphas (the thin ellipsoid also carries a
+        # screen-space low-pass term), so differencing the raw accumulations would measure
+        # that alpha gap rather than the projection error Prop. 8.4 is about.
+        gap = (out2d.mean_depth() - out3d.mean_depth())[both].abs().mean()
         results[f"{label}/depth_gap_mm"] = float(gap.item())
         results[f"{label}/relative_depth_span"] = radius / dist
 

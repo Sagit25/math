@@ -292,7 +292,11 @@ def evaluate_rendering(
             push("render/boundary_f", bf["boundary_f"])
 
             joint = pred_mask & ref.hit
-            for k, v in depth_rmse(out.depth, ref.depth, valid=joint).items():
+            # mean_depth(), not the raw accumulation: out.depth is sum_i w_i tau_i, which
+            # is short of the surface distance by roughly a factor of alpha, while ref.depth
+            # is a geometric distance. Comparing them directly reports an
+            # opacity-proportional bias as depth error.
+            for k, v in depth_rmse(out.mean_depth(), ref.depth, valid=joint).items():
                 push(f"render/{k}", v)
             for k, v in normal_angular_error(out.normal, ref.normal, valid=joint).items():
                 push(f"render/{k}", v)

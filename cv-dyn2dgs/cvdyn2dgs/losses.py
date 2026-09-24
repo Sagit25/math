@@ -185,7 +185,11 @@ def normal_consistency_loss(
     where nothing was hit, and its finite differences across a silhouette edge are
     dominated by the depth discontinuity rather than by surface orientation.
     """
-    n_depth = normal_from_depth(out.depth, camera)
+    # mean_depth(), not depth: differentiating the alpha-weighted accumulation would pick
+    # up grad(alpha) across the entire Gaussian footprint, not just at the silhouette, so
+    # the recovered normal would be wrong in the disk interior too - and this feeds a
+    # training loss.
+    n_depth = normal_from_depth(out.mean_depth(), camera)
     n_surf = out.normalized_normal() if reference_normal is None else reference_normal
     cos = (n_depth * n_surf).sum(dim=0)
     weight = (out.alpha >= float(alpha_floor)).to(out.alpha.dtype)

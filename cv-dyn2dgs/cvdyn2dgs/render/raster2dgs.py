@@ -79,10 +79,21 @@ class RenderOutput:
     """``(H, W)`` accumulated opacity - the rendered silhouette."""
 
     depth: Tensor
-    """``(H, W)`` expected ray depth :math:`\\sum_i w_i \\tau_i` in mm."""
+    """``(H, W)`` alpha-weighted depth accumulation :math:`\\sum_i w_i \\tau_i` in mm.
+
+    **This is not the expected depth.**  It is the unnormalised accumulation, so where the
+    ray is not fully opaque it is smaller than the surface distance by roughly a factor of
+    :attr:`alpha`.  Use :attr:`expected_depth` for anything compared against a geometric
+    distance, such as a ray-marched reference.
+    """
 
     normal: Tensor
-    """``(3, H, W)`` expected surfel normal :math:`\\sum_i w_i n_i` (not renormalised)."""
+    """``(3, H, W)`` alpha-weighted normal accumulation :math:`\\sum_i w_i n_i`.
+
+    Not a unit vector, for the same reason as :attr:`depth`.  Use :attr:`unit_normal`, or a
+    metric that renormalises internally (:func:`cvdyn2dgs.metrics.rendering.normal_angular_error`
+    does).
+    """
 
     distortion: Tensor
     """``(H, W)`` depth-distortion map; see :func:`_distortion` for the exact form."""
@@ -97,10 +108,31 @@ class RenderOutput:
         return int(self.color.shape[0])
 
     def normalized_normal(self, eps: float = 1e-8) -> Tensor:
+        """``(3, H, W)`` unit normal.
+
+        Use this, never :attr:`normal`, wherever a direction is required.
+        """
         return self.normal / self.normal.norm(dim=0, keepdim=True).clamp_min(eps)
 
     def mean_depth(self, eps: float = 1e-8) -> Tensor:
-        """Alpha-normalised depth, i.e. the expected depth of the *hit* surface."""
+        """Alpha-normalised depth, i.e. the expected depth of the *hit* surface, in mm.
+
+        **Use this, never :attr:`depth`, wherever a geometric distance is required** - a
+        comparison against a ray-marched reference, a finite difference to recover a
+        surface normal, or a comparison between two renderers whose accumulated opacities
+        differ.
+
+        :attr:`depth` is :math:`\\sum_i w_i \\tau_i`, so it is short of the surface distance
+        by roughly a factor of alpha. Three call sites originally used it by mistake and all
+        three were wrong in a way that no unit test would have flagged: the depth metric
+        reported an opacity-proportional bias as error, the normal loss differentiated
+        :math:`\\alpha \\tau` instead of :math:`\\tau` and so picked up
+        :math:`\\nabla\\alpha` across the whole Gaussian footprint rather than only at the
+        silhouette, and the Prop. 8.4 check compared two renderers with different alphas and
+        attributed the alpha difference to projection error. The single-disk stage in
+        ``smoke.py`` now pins ``depth == alpha * distance`` explicitly so the convention
+        cannot drift again.
+        """
         return self.depth / self.alpha.clamp_min(eps)
 
 

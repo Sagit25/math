@@ -368,10 +368,26 @@ def run_smoke(*, full: bool = False, device: str = "auto", seed: int = 0, verbos
         a = float(out.alpha[32, 32])
         _require(a > 0.5, f"a disk facing the camera rendered alpha {a:.3f} at its centre")
         _require(abs(a - 0.9) < 0.05, f"centre alpha {a:.3f}, expected ~0.9 (the opacity)")
-        d = float(out.depth[32, 32])
-        _require(abs(d - 50.0) < 0.5, f"centre depth {d:.2f} mm, expected the 50 mm camera distance")
+        # out.depth is the alpha-WEIGHTED accumulation sum_i w_i tau_i, so for a single
+        # disk of opacity 0.9 at 50 mm it reads 45 mm. Only mean_depth() - divided by the
+        # accumulated alpha - is comparable to a geometric distance. Both are pinned here
+        # because confusing them silently biases every reported depth error by the opacity,
+        # which is exactly what this check caught on the first GPU run.
+        d_raw = float(out.depth[32, 32])
+        d = float(out.mean_depth()[32, 32])
+        _require(
+            abs(d - 50.0) < 0.5,
+            f"expected depth {d:.2f} mm, should be the 50 mm camera distance "
+            f"(raw accumulation was {d_raw:.2f} mm)",
+        )
+        _require(
+            abs(d_raw - a * 50.0) < 0.5,
+            f"raw depth {d_raw:.2f} mm should equal alpha*distance = {a * 50.0:.2f} mm; "
+            f"if this fails the accumulation convention has changed and "
+            f"expected_depth() must be revisited",
+        )
         _require(float(out.alpha.max()) <= 1.0 + 1e-5, "alpha exceeded 1")
-        return f"centre alpha {a:.3f}, depth {d:.2f} mm"
+        return f"centre alpha {a:.3f}, expected depth {d:.2f} mm (raw {d_raw:.2f})"
 
     r.stage("9  2DGS rasteriser (analytic single disk)", s_raster, requires=["0  import torch / resolve device"])
 
@@ -970,7 +986,16 @@ def run_smoke(*, full: bool = False, device: str = "auto", seed: int = 0, verbos
         _require(bool(out.warnings),
                  "a commit differing from the manifest pin raised no warning")
 
-        probs = check_camera_agreement(None, [S["cams"].eval[0]])
+        # Build a camera locally rather than reading S["cams"]: that key is only set by
+        # the precompute stage, so depending on it made this contract check fail with a
+        # KeyError whenever an earlier stage failed - reporting a problem in the adapter
+        # when the adapter was fine.
+        from .render.camera import Camera
+
+        cam = Camera.look_at(
+            torch.tensor([0.0, 0.0, 50.0]), torch.zeros(3), height=16, width=16
+        )
+        probs = check_camera_agreement(None, [cam])
         _require(bool(probs), "an undeclared external camera was reported as agreeing")
         _require(len(AXIS_REQUIREMENTS) >= 8, "axis requirement table looks truncated")
         return f"{len(out.scoreable_axes())} scoreable axes, pin mismatch caught"
